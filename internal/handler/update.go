@@ -27,17 +27,10 @@ func (u *UpdateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	log.Println(r.URL.Path)
 
 	metricType := r.PathValue("metricType")
 	metricName := r.PathValue("metricName")
 	metricValue := r.PathValue("metricValue")
-
-	log.Printf("metric type: %s,\n\rmetric name: %s,\n\rmetric value: %s\n\r",
-		metricType,
-		metricName,
-		metricValue,
-	)
 
 	if metricName == "" {
 		log.Print("got empty metric name\n\r")
