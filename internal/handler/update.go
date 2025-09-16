@@ -50,7 +50,7 @@ func (u *UpdateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Type: m,
 	}
 	if err := metric.SetValue(metricValue); err != nil {
-		log.Printf("set value: %v\n\r", metricValue)
+		log.Printf("set value [%v] for [%s]: %v\n\r", metricValue, metric.Name, err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}

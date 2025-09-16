@@ -5,24 +5,6 @@ import (
 	"strconv"
 )
 
-const (
-	Counter = "counter"
-	Gauge   = "gauge"
-)
-
-// NOTE: Не усложняем пример, вводя иерархическую вложенность структур.
-// Органичиваясь плоской моделью.
-// Delta и Value объявлены через указатели,
-// что бы отличать значение "0", от не заданного значения
-// и соответственно не кодировать в структуру.
-type Metrics struct {
-	ID    string   `json:"id"`
-	MType string   `json:"type"`
-	Delta *int64   `json:"delta,omitempty"`
-	Value *float64 `json:"value,omitempty"`
-	Hash  string   `json:"hash,omitempty"`
-}
-
 type Metric struct {
 	Name  string     `json:"name"`
 	Type  MetricType `json:"type"`
@@ -38,10 +20,25 @@ const (
 	TypeCounter
 )
 
+type MetricValue struct {
+	Gauge   float64
+	Counter int64
+}
+
 var metricsTypeValues = map[string]MetricType{
 	"unknown": TypeUnknown,
 	"gauge":   TypeGauge,
 	"counter": TypeCounter,
+}
+
+var metricTypeString = []string{
+	"unknown",
+	"gauge",
+	"counter",
+}
+
+func (m MetricType) String() string {
+	return metricTypeString[m]
 }
 
 func ParseMetricType(s string) MetricType {
@@ -70,7 +67,18 @@ func (m *Metric) SetValue(s string) error {
 	return nil
 }
 
-type MetricValue struct {
-	Gauge   float64
-	Counter int64
+func Gauge(name string, value float64) Metric {
+	return Metric{
+		Name:  name,
+		Type:  TypeGauge,
+		Value: MetricValue{Gauge: value},
+	}
+}
+
+func Counter(name string, value int64) Metric {
+	return Metric{
+		Name:  name,
+		Type:  TypeCounter,
+		Value: MetricValue{Counter: value},
+	}
 }
