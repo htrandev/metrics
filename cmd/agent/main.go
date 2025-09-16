@@ -60,7 +60,7 @@ func run() error {
 }
 
 func sendMetric(metric models.Metric) error {
-	url, err := buildUrl(metric)
+	url, err := buildURL(metric)
 	if err != nil {
 		return fmt.Errorf("build url for [%+v]", metric)
 	}
@@ -72,7 +72,7 @@ func sendMetric(metric models.Metric) error {
 	return res.Body.Close()
 }
 
-func buildUrl(m models.Metric) (string, error) {
+func buildURL(m models.Metric) (string, error) {
 	u := url.URL{
 		Scheme: "http",
 		Host:   net.JoinHostPort(host, port),
