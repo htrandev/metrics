@@ -6,8 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	models "github.com/htrandev/metrics/internal/model"
 	"github.com/stretchr/testify/require"
+
+	models "github.com/htrandev/metrics/internal/model"
 )
 
 var errStore = errors.New("store error")
@@ -23,6 +24,14 @@ func (m *mockStorage) Store(_ *models.Metric) error {
 		return errStore
 	}
 	return nil
+}
+
+func (m *mockStorage) Get(string) (models.Metric, error) {
+	return models.Metric{}, nil
+}
+
+func (m *mockStorage) GetAll() ([]models.Metric, error) {
+	return nil, nil
 }
 
 func TestUpdateHandler(t *testing.T) {
@@ -83,10 +92,10 @@ func TestUpdateHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(tc.method, tc.url, nil)
 
-			h := NewUpdateHandler(tc.store)
+			h := NewMetricsHandler(tc.store)
 
 			mux := http.NewServeMux()
-			mux.Handle("/update/{metricType}/{metricName}/{metricValue}", h)
+			mux.HandleFunc("/update/{metricType}/{metricName}/{metricValue}", h.Update)
 			mux.ServeHTTP(w, r)
 
 			res := w.Result()
