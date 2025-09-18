@@ -1,7 +1,9 @@
 package repository
 
 import (
+	"fmt"
 	"log"
+	"sort"
 
 	models "github.com/htrandev/metrics/internal/model"
 )
@@ -28,7 +30,7 @@ func (m *MemStorage) Store(request *models.Metric) error {
 		return nil
 	}
 
-	switch request.Type {
+	switch request.Value.Type {
 	case models.TypeGauge:
 		metric.Value.Gauge = request.Value.Gauge
 	case models.TypeCounter:
@@ -37,4 +39,24 @@ func (m *MemStorage) Store(request *models.Metric) error {
 
 	m.metrics[request.Name] = metric
 	return nil
+}
+
+func (m *MemStorage) Get(name string) (models.Metric, error) {
+	metric, ok := m.metrics[name]
+	if !ok {
+		return models.Metric{}, fmt.Errorf("metric with name [%s] not found", name)
+	}
+	return metric, nil
+}
+
+func (m *MemStorage) GetAll() ([]models.Metric, error) {
+	metrics := make([]models.Metric, 0, len(m.metrics))
+	for _, metric := range m.metrics {
+		metrics = append(metrics, metric)
+	}
+
+	sort.Slice(metrics, func(i, j int) bool {
+		return metrics[i].Name < metrics[j].Name
+	})
+	return metrics, nil
 }
