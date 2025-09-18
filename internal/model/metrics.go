@@ -6,8 +6,7 @@ import (
 )
 
 type Metric struct {
-	Name  string     `json:"name"`
-	Type  MetricType `json:"type"`
+	Name  string `json:"name"`
 	Value MetricValue
 }
 
@@ -19,11 +18,6 @@ const (
 	TypeGauge
 	TypeCounter
 )
-
-type MetricValue struct {
-	Gauge   float64
-	Counter int64
-}
 
 var metricsTypeValues = map[string]MetricType{
 	"unknown": TypeUnknown,
@@ -49,8 +43,25 @@ func ParseMetricType(s string) MetricType {
 	return TypeUnknown
 }
 
+type MetricValue struct {
+	Type    MetricType `json:"type"`
+	Gauge   float64    `json:"gauge,omitempty"`
+	Counter int64      `json:"counter,omitempty"`
+}
+
+func (mv MetricValue) String() string {
+	switch mv.Type {
+	case TypeGauge:
+		return strconv.FormatFloat(mv.Gauge, 'f', -1, 64)
+	case TypeCounter:
+		return strconv.FormatInt(mv.Counter, 10)
+	default:
+		return ""
+	}
+}
+
 func (m *Metric) SetValue(s string) error {
-	switch m.Type {
+	switch m.Value.Type {
 	case TypeGauge:
 		val, err := strconv.ParseFloat(s, 64)
 		if err != nil {
@@ -70,15 +81,13 @@ func (m *Metric) SetValue(s string) error {
 func Gauge(name string, value float64) Metric {
 	return Metric{
 		Name:  name,
-		Type:  TypeGauge,
-		Value: MetricValue{Gauge: value},
+		Value: MetricValue{Type: TypeGauge, Gauge: value},
 	}
 }
 
 func Counter(name string, value int64) Metric {
 	return Metric{
 		Name:  name,
-		Type:  TypeCounter,
-		Value: MetricValue{Counter: value},
+		Value: MetricValue{Type: TypeCounter, Counter: value},
 	}
 }
