@@ -25,6 +25,12 @@ func NewMetricsHandler(s MetricStorage) *MetricHandler {
 }
 
 func (h *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		log.Printf("expected %s, but got %s\n\r", http.MethodGet, r.Method)
+		rw.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
 	metricType := r.PathValue("metricType")
 	metricName := r.PathValue("metricName")
 
@@ -47,6 +53,12 @@ func (h *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MetricHandler) GetAll(rw http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		log.Printf("expected %s, but got %s\n\r", http.MethodGet, r.Method)
+		rw.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
 	metrics, err := h.storage.GetAll()
 	if err != nil {
 		log.Printf("get all metrics: %v", err)
