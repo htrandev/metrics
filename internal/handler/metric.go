@@ -24,7 +24,7 @@ func NewMetricsHandler(s MetricStorage) *MetricHandler {
 	}
 }
 
-func (m *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
+func (h *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
 	metricType := r.PathValue("metricType")
 	metricName := r.PathValue("metricName")
 
@@ -35,7 +35,7 @@ func (m *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	metric, err := m.storage.Get(metricName)
+	metric, err := h.storage.Get(metricName)
 	if err != nil {
 		rw.WriteHeader(http.StatusNotFound)
 		return
@@ -46,8 +46,8 @@ func (m *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
 	rw.Write([]byte(metric.Value.String()))
 }
 
-func (m *MetricHandler) GetAll(rw http.ResponseWriter, r *http.Request) {
-	metrics, err := m.storage.GetAll()
+func (h *MetricHandler) GetAll(rw http.ResponseWriter, r *http.Request) {
+	metrics, err := h.storage.GetAll()
 	if err != nil {
 		log.Printf("get all metrics: %v", err)
 		rw.WriteHeader(http.StatusInternalServerError)
@@ -68,7 +68,7 @@ func (m *MetricHandler) GetAll(rw http.ResponseWriter, r *http.Request) {
 	rw.Write([]byte(builder.String()))
 }
 
-func (u *MetricHandler) Update(rw http.ResponseWriter, r *http.Request) {
+func (h *MetricHandler) Update(rw http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		log.Printf("expected %s, but got %s\n\r", http.MethodPost, r.Method)
 		rw.WriteHeader(http.StatusMethodNotAllowed)
@@ -85,8 +85,8 @@ func (u *MetricHandler) Update(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m := models.ParseMetricType(metricType)
-	if m == models.TypeUnknown {
+	mt := models.ParseMetricType(metricType)
+	if mt == models.TypeUnknown {
 		log.Print("got unknown metric type\n\r")
 		rw.WriteHeader(http.StatusBadRequest)
 		return
@@ -95,7 +95,7 @@ func (u *MetricHandler) Update(rw http.ResponseWriter, r *http.Request) {
 	metric := &models.Metric{
 		Name: metricName,
 		Value: models.MetricValue{
-			Type: m,
+			Type: mt,
 		},
 	}
 	if err := metric.SetValue(metricValue); err != nil {
@@ -104,7 +104,7 @@ func (u *MetricHandler) Update(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := u.storage.Store(metric); err != nil {
+	if err := h.storage.Store(metric); err != nil {
 		log.Printf("store error: %s\n\r", err.Error())
 		rw.WriteHeader(http.StatusBadRequest)
 		return
