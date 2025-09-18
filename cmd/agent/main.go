@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/go-resty/resty/v2"
 	models "github.com/htrandev/metrics/internal/model"
 )
 
@@ -65,11 +65,12 @@ func sendMetric(metric models.Metric) error {
 		return fmt.Errorf("build url for [%+v]", metric)
 	}
 
-	res, err := http.Post(url, "Content-Type: text/plain", nil)
+	client := resty.New()
+	_, err = client.R().Post(url)
 	if err != nil {
 		return fmt.Errorf("post: %w", err)
 	}
-	return res.Body.Close()
+	return nil
 }
 
 func buildURL(m models.Metric) (string, error) {
@@ -79,17 +80,17 @@ func buildURL(m models.Metric) (string, error) {
 	}
 	var err error
 
-	switch m.Type {
+	switch m.Value.Type {
 	case models.TypeGauge:
-		u.Path, err = url.JoinPath("update", m.Type.String(), m.Name, strconv.FormatFloat(m.Value.Gauge, 'f', -1, 64))
+		u.Path, err = url.JoinPath("update", m.Value.Type.String(), m.Name, strconv.FormatFloat(m.Value.Gauge, 'f', -1, 64))
 	case models.TypeCounter:
-		u.Path, err = url.JoinPath("update", m.Type.String(), m.Name, strconv.FormatInt(m.Value.Counter, 10))
+		u.Path, err = url.JoinPath("update", m.Value.Type.String(), m.Name, strconv.FormatInt(m.Value.Counter, 10))
 	}
 
 	if err != nil {
 		return "", fmt.Errorf("join path: %w", err)
 	}
 
-	log.Printf("send metric: [%+v]", m)
+	log.Printf("send metric: [%+v] type: %s", m, m.Value.Type)
 	return u.String(), nil
 }

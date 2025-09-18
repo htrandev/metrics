@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/htrandev/metrics/internal/handler"
 	"github.com/htrandev/metrics/internal/repository"
 )
@@ -17,11 +19,14 @@ func main() {
 }
 
 func run() error {
-	mux := http.NewServeMux()
-	s := repository.NewMemStorageRepository()
-	updateHandler := handler.NewUpdateHandler(s)
+	r := chi.NewRouter()
 
-	mux.Handle("/update/{metricType}/{metricName}/{metricValue}", updateHandler)
-	log.Print("Start serving")
-	return http.ListenAndServe("localhost:8080", mux)
+	s := repository.NewMemStorageRepository()
+	metricHandler := handler.NewMetricsHandler(s)
+
+	log.Println("start serving")
+	r.Get("/", metricHandler.GetAll)
+	r.Get("/value/{metricType}/{metricName}", metricHandler.Get)
+	r.Post("/update/{metricType}/{metricName}/{metricValue}", metricHandler.Update)
+	return http.ListenAndServe("localhost:8080", r)
 }
