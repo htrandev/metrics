@@ -91,6 +91,96 @@ func TestStore(t *testing.T) {
 	}
 }
 
+func TestGet(t *testing.T) {
+	emptyMemstorage := NewMemStorageRepository()
+
+	testCases := []struct {
+		name           string
+		storage        *MemStorage
+		metricName     string
+		wantErr        bool
+		expectedMetric models.Metric
+	}{
+		{
+			name:           "valid gauge",
+			storage:        filledMemStorage(t),
+			metricName:     "gauge",
+			wantErr:        false,
+			expectedMetric: models.Gauge("gauge", 0.1),
+		},
+		{
+			name:           "valid counter",
+			storage:        filledMemStorage(t),
+			metricName:     "counter",
+			wantErr:        false,
+			expectedMetric: models.Counter("counter", 1),
+		},
+		{
+			name:       "empty storage",
+			storage:    emptyMemstorage,
+			metricName: "test",
+			wantErr:    true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			m, err := tc.storage.Get(tc.metricName)
+			if tc.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.EqualValues(t, tc.expectedMetric, m)
+		})
+	}
+}
+
+func TestGetAll(t *testing.T) {
+	emptyMemstorage := NewMemStorageRepository()
+
+	testCases := []struct {
+		name           string
+		storage        *MemStorage
+		wantErr        bool
+		expectedResult []models.Metric
+	}{
+		{
+			name:           "valid empty storage",
+			storage:        emptyMemstorage,
+			wantErr:        false,
+			expectedResult: []models.Metric{},
+		},
+		{
+			name:    "valid filled storage",
+			storage: filledMemStorage(t),
+			wantErr: false,
+			expectedResult: []models.Metric{
+				{Name: "counter", Value: models.MetricValue{
+					Type:    models.TypeCounter,
+					Counter: 1,
+				}},
+				{Name: "gauge", Value: models.MetricValue{
+					Type:  models.TypeGauge,
+					Gauge: 0.1,
+				}},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			m, err := tc.storage.GetAll()
+			if tc.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.EqualValues(t, tc.expectedResult, m)
+		})
+	}
+}
+
 func filledMemStorage(t *testing.T) *MemStorage {
 	t.Helper()
 
