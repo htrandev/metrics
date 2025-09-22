@@ -19,6 +19,9 @@ func main() {
 }
 
 func run() error {
+	log.Println("init config")
+	flags := parseFlags()
+
 	r := chi.NewRouter()
 
 	s := repository.NewMemStorageRepository()
@@ -28,5 +31,5 @@ func run() error {
 	r.Get("/", metricHandler.GetAll)
 	r.Get("/value/{metricType}/{metricName}", metricHandler.Get)
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", metricHandler.Update)
-	return http.ListenAndServe("localhost:8080", r)
+	return http.ListenAndServe(flags.addr, r)
 }

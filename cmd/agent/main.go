@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"net"
 	"net/url"
 	"os"
 	"strconv"
@@ -11,16 +10,6 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	models "github.com/htrandev/metrics/internal/model"
-)
-
-const (
-	host = "localhost"
-	port = "8080"
-)
-
-const (
-	poolInterval   = time.Second * 2
-	reportInterval = time.Second * 10
 )
 
 func main() {
@@ -31,11 +20,14 @@ func main() {
 }
 
 func run() error {
+	log.Println("init config")
+	conf := parseFlags()
+
 	log.Println("init tickers")
-	poolTicker := time.NewTicker(poolInterval)
+	poolTicker := time.NewTicker(conf.pollInterval)
 	defer poolTicker.Stop()
 
-	reportTicker := time.NewTicker(reportInterval)
+	reportTicker := time.NewTicker(conf.reportInterval)
 	defer reportTicker.Stop()
 
 	for {
@@ -50,7 +42,7 @@ func run() error {
 
 		if send {
 			for _, metric := range metrics {
-				if err := sendMetric(metric); err != nil {
+				if err := sendMetric(conf.addr, metric); err != nil {
 					return fmt.Errorf("send metric: %w", err)
 				}
 			}
@@ -59,8 +51,8 @@ func run() error {
 
 }
 
-func sendMetric(metric models.Metric) error {
-	url, err := buildURL(metric)
+func sendMetric(addr string, metric models.Metric) error {
+	url, err := buildURL(addr, metric)
 	if err != nil {
 		return fmt.Errorf("build url for [%+v]", metric)
 	}
@@ -73,10 +65,10 @@ func sendMetric(metric models.Metric) error {
 	return nil
 }
 
-func buildURL(m models.Metric) (string, error) {
+func buildURL(addr string, m models.Metric) (string, error) {
 	u := url.URL{
 		Scheme: "http",
-		Host:   net.JoinHostPort(host, port),
+		Host:   addr,
 	}
 	var err error
 
