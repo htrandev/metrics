@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"strings"
@@ -9,9 +10,9 @@ import (
 )
 
 type MetricStorage interface {
-	Get(string) (models.Metric, error)
-	GetAll() ([]models.Metric, error)
-	Store(m *models.Metric) error
+	Get(context.Context, string) (models.Metric, error)
+	GetAll(context.Context) ([]models.Metric, error)
+	Store(context.Context, *models.Metric) error
 }
 
 type MetricHandler struct {
@@ -25,11 +26,7 @@ func NewMetricsHandler(s MetricStorage) *MetricHandler {
 }
 
 func (h *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		log.Printf("expected %s, but got %s\n\r", http.MethodGet, r.Method)
-		rw.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
+	ctx := r.Context()
 
 	metricType := r.PathValue("metricType")
 	metricName := r.PathValue("metricName")
@@ -41,7 +38,7 @@ func (h *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	metric, err := h.storage.Get(metricName)
+	metric, err := h.storage.Get(ctx, metricName)
 	if err != nil {
 		rw.WriteHeader(http.StatusNotFound)
 		return
@@ -53,13 +50,9 @@ func (h *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MetricHandler) GetAll(rw http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		log.Printf("expected %s, but got %s\n\r", http.MethodGet, r.Method)
-		rw.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
+	ctx := r.Context()
 
-	metrics, err := h.storage.GetAll()
+	metrics, err := h.storage.GetAll(ctx)
 	if err != nil {
 		log.Printf("get all metrics: %v", err)
 		rw.WriteHeader(http.StatusInternalServerError)
@@ -81,11 +74,7 @@ func (h *MetricHandler) GetAll(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MetricHandler) Update(rw http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		log.Printf("expected %s, but got %s\n\r", http.MethodPost, r.Method)
-		rw.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
+	ctx := r.Context()
 
 	metricType := r.PathValue("metricType")
 	metricName := r.PathValue("metricName")
@@ -116,7 +105,7 @@ func (h *MetricHandler) Update(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.storage.Store(metric); err != nil {
+	if err := h.storage.Store(ctx, metric); err != nil {
 		log.Printf("store error: %s\n\r", err.Error())
 		rw.WriteHeader(http.StatusBadRequest)
 		return

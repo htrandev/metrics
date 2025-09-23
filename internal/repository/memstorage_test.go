@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -80,13 +81,20 @@ func TestStore(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.storage.Store(tc.req)
+			err := tc.storage.Store(context.Background(), tc.req)
 			if tc.wantErr {
 				require.Error(t, err)
 				return
 			}
+
+			var actValue models.Metric
+			if tc.expectedValue.Name != "" {
+				actValue, err = tc.storage.Get(context.Background(), tc.expectedValue.Name)
+				require.NoError(t, err)
+			}
+
 			require.NoError(t, err)
-			require.Equal(t, tc.expectedValue, tc.storage.metrics[tc.expectedValue.Name])
+			require.Equal(t, tc.expectedValue, actValue)
 		})
 	}
 }
@@ -125,7 +133,7 @@ func TestGet(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			m, err := tc.storage.Get(tc.metricName)
+			m, err := tc.storage.Get(context.Background(), tc.metricName)
 			if tc.wantErr {
 				require.Error(t, err)
 				return
@@ -170,7 +178,7 @@ func TestGetAll(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			m, err := tc.storage.GetAll()
+			m, err := tc.storage.GetAll(context.Background())
 			if tc.wantErr {
 				require.Error(t, err)
 				return
@@ -183,16 +191,17 @@ func TestGetAll(t *testing.T) {
 
 func filledMemStorage(t *testing.T) *MemStorage {
 	t.Helper()
+	ctx := context.Background()
 
 	memstorage := NewMemStorageRepository()
-	if err := memstorage.Store(&models.Metric{
+	if err := memstorage.Store(ctx, &models.Metric{
 		Name:  "gauge",
 		Value: models.MetricValue{Type: models.TypeGauge, Gauge: 0.1},
 	}); err != nil {
 		t.Fatalf("store gauge: %v", err)
 	}
 
-	if err := memstorage.Store(&models.Metric{
+	if err := memstorage.Store(ctx, &models.Metric{
 		Name:  "counter",
 		Value: models.MetricValue{Type: models.TypeCounter, Counter: 1},
 	}); err != nil {

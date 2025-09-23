@@ -1,18 +1,24 @@
 package models
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"runtime"
 	"sync/atomic"
 	"time"
 )
 
-var counter atomic.Int64
+type Collection struct {
+	counter atomic.Int64
+}
 
-var rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
+func NewCollection() *Collection {
+	return &Collection{}
+}
 
-func Collect() []Metric {
-	counter.Add(1)
+func (c *Collection) Collect() []Metric {
+	c.counter.Add(1)
+
+	rnd := rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), 0))
 
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
@@ -46,6 +52,6 @@ func Collect() []Metric {
 		Gauge("Sys", float64(ms.Sys)),
 		Gauge("TotalAlloc", float64(ms.TotalAlloc)),
 		Gauge("RandomValue", rnd.Float64()),
-		Counter("PollCount", counter.Load()),
+		Counter("PollCount", c.counter.Load()),
 	}
 }

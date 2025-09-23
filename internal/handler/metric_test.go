@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -32,14 +33,14 @@ type mockStorage struct {
 
 var _ MetricStorage = (*mockStorage)(nil)
 
-func (m *mockStorage) Store(_ *models.Metric) error {
+func (m *mockStorage) Store(context.Context, *models.Metric) error {
 	if m.storeErr {
 		return errStore
 	}
 	return nil
 }
 
-func (m *mockStorage) Get(string) (models.Metric, error) {
+func (m *mockStorage) Get(context.Context, string) (models.Metric, error) {
 	if m.getErr {
 		return models.Metric{}, errGet
 	}
@@ -56,7 +57,7 @@ func (m *mockStorage) Get(string) (models.Metric, error) {
 	return metric, nil
 }
 
-func (m *mockStorage) GetAll() ([]models.Metric, error) {
+func (m *mockStorage) GetAll(context.Context) ([]models.Metric, error) {
 	if m.getAll {
 		return nil, errGetAll
 	}
@@ -87,13 +88,6 @@ func TestUpdateHandler(t *testing.T) {
 			method:       http.MethodPost,
 			url:          "/update/gauge/someMetric/527",
 			expectedCode: http.StatusOK,
-		},
-		{
-			name:         "invalid method",
-			store:        &mockStorage{},
-			method:       http.MethodGet,
-			url:          "/update/counter/someMetric/527",
-			expectedCode: http.StatusMethodNotAllowed,
 		},
 		{
 			name:         "invalid metric type",
@@ -167,14 +161,6 @@ func TestGetHandler(t *testing.T) {
 			expectedResponse: "1",
 		},
 		{
-			name:         "wrong method",
-			storage:      &mockStorage{},
-			method:       http.MethodPost,
-			url:          "/value/gauge/test",
-			wantErr:      true,
-			expectedCode: http.StatusMethodNotAllowed,
-		},
-		{
 			name:         "unknown metric type",
 			storage:      &mockStorage{},
 			method:       http.MethodGet,
@@ -239,13 +225,6 @@ func TestGetAll(t *testing.T) {
 			wantErr:          false,
 			expectedCode:     http.StatusOK,
 			expectedResponse: "gauge: 0.1\rcounter: 1\r",
-		},
-		{
-			name:         "wrong method",
-			storage:      &mockStorage{},
-			method:       http.MethodPost,
-			wantErr:      true,
-			expectedCode: http.StatusMethodNotAllowed,
 		},
 		{
 			name:         "get all error",

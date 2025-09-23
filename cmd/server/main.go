@@ -1,13 +1,19 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/htrandev/metrics/internal/handler"
+	"github.com/htrandev/metrics/internal/handler/middleware"
 	"github.com/htrandev/metrics/internal/repository"
 )
 
@@ -28,8 +34,34 @@ func run() error {
 	metricHandler := handler.NewMetricsHandler(s)
 
 	log.Println("start serving")
-	r.Get("/", metricHandler.GetAll)
-	r.Get("/value/{metricType}/{metricName}", metricHandler.Get)
-	r.Post("/update/{metricType}/{metricName}/{metricValue}", metricHandler.Update)
-	return http.ListenAndServe(flags.addr, r)
+	r.With(middleware.MethodChecker(http.MethodGet)).
+		Get("/", metricHandler.GetAll)
+	r.With(middleware.MethodChecker(http.MethodGet)).
+		Get("/value/{metricType}/{metricName}", metricHandler.Get)
+	r.With(middleware.MethodChecker(http.MethodPost)).
+		Post("/update/{metricType}/{metricName}/{metricValue}", metricHandler.Update)
+
+	srv := http.Server{
+		Addr:    flags.addr,
+		Handler: r,
+	}
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil {
+			log.Fatalf("can't start server: %v", err)
+		}
+	}()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	<-stop
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		return fmt.Errorf("shutdown server: %w", err)
+	}
+	return nil
 }

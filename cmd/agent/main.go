@@ -30,6 +30,9 @@ func run() error {
 	reportTicker := time.NewTicker(conf.reportInterval)
 	defer reportTicker.Stop()
 
+	client := resty.New()
+	collection := models.NewCollection()
+
 	for {
 		var send bool
 		select {
@@ -38,11 +41,11 @@ func run() error {
 			send = true
 		}
 		log.Println("collect metrics")
-		metrics := models.Collect()
+		metrics := collection.Collect()
 
 		if send {
 			for _, metric := range metrics {
-				if err := sendMetric(conf.addr, metric); err != nil {
+				if err := sendMetric(client, conf.addr, metric); err != nil {
 					return fmt.Errorf("send metric: %w", err)
 				}
 			}
@@ -51,13 +54,12 @@ func run() error {
 
 }
 
-func sendMetric(addr string, metric models.Metric) error {
+func sendMetric(client *resty.Client, addr string, metric models.Metric) error {
 	url, err := buildURL(addr, metric)
 	if err != nil {
 		return fmt.Errorf("build url for [%+v]", metric)
 	}
 
-	client := resty.New()
 	_, err = client.R().Post(url)
 	if err != nil {
 		return fmt.Errorf("post: %w", err)

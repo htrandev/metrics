@@ -13,15 +13,15 @@ type config struct {
 
 func parseFlags() *config {
 	var c config
-	var pool, report int
+	var poll, report int
 
 	flag.StringVar(&c.addr, "a", "localhost:8080", "address to run server")
 	flag.IntVar(&report, "r", 10, "report interval in seconds")
-	flag.IntVar(&pool, "p", 2, "poll interval in seconds")
+	flag.IntVar(&poll, "p", 2, "poll interval in seconds")
 
 	flag.Parse()
 
-	c.pollInterval = time.Duration(pool) * time.Second
+	c.pollInterval = time.Duration(poll) * time.Second
 	c.reportInterval = time.Duration(report) * time.Second
 
 	return &c

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sort"
@@ -19,7 +20,7 @@ func NewMemStorageRepository() *MemStorage {
 	}
 }
 
-func (m *MemStorage) Store(request *models.Metric) error {
+func (m *MemStorage) Store(ctx context.Context, request *models.Metric) error {
 	if request == nil {
 		log.Println("repository: request is nil")
 		return nil
@@ -41,7 +42,7 @@ func (m *MemStorage) Store(request *models.Metric) error {
 	return nil
 }
 
-func (m *MemStorage) Get(name string) (models.Metric, error) {
+func (m *MemStorage) Get(ctx context.Context, name string) (models.Metric, error) {
 	metric, ok := m.metrics[name]
 	if !ok {
 		return models.Metric{}, fmt.Errorf("metric with name [%s] not found", name)
@@ -49,7 +50,7 @@ func (m *MemStorage) Get(name string) (models.Metric, error) {
 	return metric, nil
 }
 
-func (m *MemStorage) GetAll() ([]models.Metric, error) {
+func (m *MemStorage) GetAll(ctx context.Context) ([]models.Metric, error) {
 	metrics := make([]models.Metric, 0, len(m.metrics))
 	for _, metric := range m.metrics {
 		metrics = append(metrics, metric)
