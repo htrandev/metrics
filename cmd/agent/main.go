@@ -21,7 +21,10 @@ func main() {
 
 func run() error {
 	log.Println("init config")
-	conf := parseFlags()
+	conf, err := parseFlags()
+	if err != nil {
+		return fmt.Errorf("parse flags: %w", err)
+	}
 
 	log.Println("init tickers")
 	poolTicker := time.NewTicker(conf.pollInterval)
