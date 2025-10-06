@@ -33,19 +33,32 @@ func run() error {
 	s := repository.NewMemStorageRepository()
 	metricHandler := handler.NewMetricsHandler(s)
 
-	log.Println("start serving")
-	r.With(middleware.MethodChecker(http.MethodGet)).
-		Get("/", metricHandler.GetAll)
-	r.With(middleware.MethodChecker(http.MethodGet)).
-		Get("/value/{metricType}/{metricName}", metricHandler.Get)
-	r.With(middleware.MethodChecker(http.MethodPost)).
-		Post("/update/{metricType}/{metricName}/{metricValue}", metricHandler.Update)
+	lm, err := middleware.NewLogger("info")
+	if err != nil {
+		return fmt.Errorf("init logger: %w", err)
+	}
+
+	r.With(
+		middleware.MethodChecker(http.MethodGet),
+		lm.Logger(),
+	).Get("/", metricHandler.GetAll)
+
+	r.With(
+		middleware.MethodChecker(http.MethodGet),
+		lm.Logger(),
+	).Get("/value/{metricType}/{metricName}", metricHandler.Get)
+
+	r.With(
+		middleware.MethodChecker(http.MethodPost),
+		lm.Logger(),
+	).Post("/update/{metricType}/{metricName}/{metricValue}", metricHandler.Update)
 
 	srv := http.Server{
 		Addr:    flags.addr,
 		Handler: r,
 	}
 
+	log.Println("start serving")
 	go func() {
 		if err := srv.ListenAndServe(); err != nil {
 			log.Fatalf("can't start server: %v", err)
