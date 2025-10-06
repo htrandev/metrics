@@ -4,12 +4,12 @@ import "net/http"
 
 type responseWriter struct {
 	http.ResponseWriter
-	body       int
+	bodySize   int
 	statusCode int
 }
 
 func (w *responseWriter) Write(p []byte) (int, error) {
-	w.body = len(p)
+	w.bodySize += len(p)
 	return w.ResponseWriter.Write(p)
 }
 

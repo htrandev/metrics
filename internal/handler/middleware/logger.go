@@ -46,7 +46,7 @@ func (l *Log) Logger() func(next http.Handler) http.Handler {
 
 			l.log.Info("sending HTTP response",
 				zap.Int("status code", rw.statusCode),
-				zap.Int("size", rw.body),
+				zap.Int("size", rw.bodySize),
 			)
 		})
 	}
