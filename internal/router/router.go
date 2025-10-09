@@ -39,7 +39,7 @@ func New(handler *handler.MetricHandler) (*chi.Mux, error) {
 		middleware.Logger(zl),
 		middleware.ContentType(),
 	).Post("/update/", handler.UpdateViaBody)
-	
+
 	r.With(
 		middleware.MethodChecker(http.MethodPost),
 		middleware.Logger(zl),

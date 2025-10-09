@@ -9,7 +9,6 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	models "github.com/htrandev/metrics/internal/model"
-	"github.com/mailru/easyjson"
 )
 
 func main() {
@@ -64,16 +63,10 @@ func sendMetric(client *resty.Client, addr string, metric models.Metric) error {
 	}
 
 	req := buildRequest(metric)
-	log.Printf("send metric: [%+v] type: %s", req, req.MType)
-
-	body, err := easyjson.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("marshal: %w", err)
-	}
 
 	_, err = client.R().
 		SetHeader("Content-Type", "application/json").
-		SetBody(body).
+		SetBody(req).
 		Post(url)
 	if err != nil {
 		return fmt.Errorf("post: %w", err)
