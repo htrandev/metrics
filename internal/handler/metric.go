@@ -37,8 +37,6 @@ func (h *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
 	metricType := r.PathValue("metricType")
 	metricName := r.PathValue("metricName")
 
-	h.logger.Debug("", zap.String("path", r.URL.Path), zap.String("type", metricType), zap.String("name", metricName))
-
 	mt := models.ParseMetricType(metricType)
 	if mt == models.TypeUnknown {
 		h.logger.Error("got unknown metric type", zap.String("type", metricType), zap.String("scope", "handler/Get"))
@@ -152,8 +150,19 @@ func (h *MetricHandler) UpdateViaBody(rw http.ResponseWriter, r *http.Request) {
 	}
 	h.logger.Info("successfully stored")
 
+	response := buildResponse(*m)
+
+	body, err := easyjson.Marshal(response)
+	if err != nil {
+		h.logger.Error("get from storage", zap.Error(err), zap.String("scope", "handler/UpdateViaBody"))
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	rw.Header().Set("Content-Type", "application/json")
 	rw.WriteHeader(http.StatusOK)
+	rw.Write(body)
+
 }
 
 func (h *MetricHandler) GetViaBody(rw http.ResponseWriter, r *http.Request) {
