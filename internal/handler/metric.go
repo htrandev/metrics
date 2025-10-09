@@ -210,8 +210,10 @@ func buildUpdateRequest(r *http.Request) (*models.Metric, error) {
 	switch req.MType {
 	case "gauge":
 		m.Value.Type = models.TypeGauge
+		m.Value.Gauge = *req.Value
 	case "counter":
 		m.Value.Type = models.TypeCounter
+		m.Value.Counter = *req.Delta
 	default:
 		return nil, fmt.Errorf("unknown metric type: %s", req.MType)
 	}

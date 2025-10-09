@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/url"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -63,7 +62,8 @@ func sendMetric(client *resty.Client, addr string, metric models.Metric) error {
 		return fmt.Errorf("build url for [%+v]", metric)
 	}
 
-	_, err = client.R().Post(url)
+	req := buildRequest(metric)
+	_, err = client.R().SetBody(req).Post(url)
 	if err != nil {
 		return fmt.Errorf("post: %w", err)
 	}
@@ -76,13 +76,7 @@ func buildURL(addr string, m models.Metric) (string, error) {
 		Host:   addr,
 	}
 	var err error
-
-	switch m.Value.Type {
-	case models.TypeGauge:
-		u.Path, err = url.JoinPath("update", m.Value.Type.String(), m.Name, strconv.FormatFloat(m.Value.Gauge, 'f', -1, 64))
-	case models.TypeCounter:
-		u.Path, err = url.JoinPath("update", m.Value.Type.String(), m.Name, strconv.FormatInt(m.Value.Counter, 10))
-	}
+	u.Path, err = url.JoinPath("update/")
 
 	if err != nil {
 		return "", fmt.Errorf("join path: %w", err)
@@ -90,4 +84,20 @@ func buildURL(addr string, m models.Metric) (string, error) {
 
 	log.Printf("send metric: [%+v] type: %s", m, m.Value.Type)
 	return u.String(), nil
+}
+
+func buildRequest(metric models.Metric) models.Metrics {
+	m := models.Metrics{
+		ID:    metric.Name,
+		MType: metric.Value.Type.String(),
+	}
+
+	switch metric.Value.Type {
+	case models.TypeGauge:
+		m.Value = &metric.Value.Gauge
+	case models.TypeCounter:
+		m.Delta = &metric.Value.Counter
+	}
+
+	return m
 }
