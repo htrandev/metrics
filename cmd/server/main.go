@@ -10,11 +10,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/htrandev/metrics/internal/handler"
-	"github.com/htrandev/metrics/internal/handler/middleware"
 	"github.com/htrandev/metrics/internal/repository"
+	"github.com/htrandev/metrics/internal/router"
 	"github.com/htrandev/metrics/pkg/logger"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -27,8 +27,7 @@ func main() {
 func run() error {
 	flags := parseFlags()
 
-	// zl, err := logger.NewZapLogger(flags.logLvl)
-	zl, err := logger.NewZapLogger("error")
+	zl, err := logger.NewZapLogger(flags.logLvl)
 	if err != nil {
 		return fmt.Errorf("init logger: %w", err)
 	}
@@ -37,49 +36,21 @@ func run() error {
 	s := repository.NewMemStorageRepository()
 	metricHandler := handler.NewMetricsHandler(zl, s)
 
-	// router, err := router.New(metricHandler)
-	// if err != nil {
-	// 	return fmt.Errorf("can't create new router: %w", err)
-	// }
+	router, err := router.New(metricHandler)
+	if err != nil {
+		return fmt.Errorf("can't create new router: %w", err)
+	}
 
-	r := chi.NewRouter()
-
-	r.With(
-		middleware.MethodChecker(http.MethodGet),
-		middleware.Logger(zl),
-	).Get("/", metricHandler.GetAll)
-
-	r.With(
-		middleware.MethodChecker(http.MethodGet),
-		middleware.Logger(zl),
-	).Get("/value/{metricType}/{metricName}", metricHandler.Get)
-
-	r.With(
-		middleware.MethodChecker(http.MethodPost),
-		middleware.Logger(zl),
-	).Post("/update/{metricType}/{metricName}/{metricValue}", metricHandler.Update)
-
-	r.With(
-		middleware.MethodChecker(http.MethodPost),
-		middleware.Logger(zl),
-		middleware.ContentType(),
-	).Post("/update/", metricHandler.UpdateViaBody)
-
-	r.With(
-		middleware.MethodChecker(http.MethodPost),
-		middleware.Logger(zl),
-		middleware.ContentType(),
-	).Post("/value/", metricHandler.GetViaBody)
-
+	zl.Info("", zap.String("addr", flags.addr))
 	srv := http.Server{
 		Addr:    flags.addr,
-		Handler: r,
+		Handler: router,
 	}
 
 	zl.Info("start serving")
 	go func() {
-		if err := srv.ListenAndServe(); err != nil {
-			log.Fatalf("can't start server: %v", err)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			zl.Error("can't start server", zap.Error(err))
 		}
 	}()
 
