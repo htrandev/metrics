@@ -14,7 +14,7 @@ import (
 func New(handler *handler.MetricHandler) (*chi.Mux, error) {
 	r := chi.NewRouter()
 
-	zl, err := logger.NewZapLogger("info")
+	zl, err := logger.NewZapLogger("error")
 	if err != nil {
 		return nil, fmt.Errorf("init logger: %w", err)
 	}
