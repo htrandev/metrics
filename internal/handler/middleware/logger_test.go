@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/htrandev/metrics/pkg/logger"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,10 +42,10 @@ func TestLogger(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			lm, err := NewLogger("info")
+			lm, err := logger.NewZapLogger("info")
 			require.NoError(t, err)
 
-			wrapper := lm.Logger()
+			wrapper := Logger(lm)
 			wrapper(tc.handler).ServeHTTP(rec, tc.request)
 
 			require.Equal(t, tc.statusCode, rec.Code)

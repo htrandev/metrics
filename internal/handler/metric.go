@@ -2,9 +2,13 @@ package handler
 
 import (
 	"context"
-	"log"
+	"fmt"
+	"io"
 	"net/http"
 	"strings"
+
+	"github.com/mailru/easyjson"
+	"go.uber.org/zap"
 
 	models "github.com/htrandev/metrics/internal/model"
 )
@@ -16,11 +20,13 @@ type MetricStorage interface {
 }
 
 type MetricHandler struct {
+	logger  *zap.Logger
 	storage MetricStorage
 }
 
-func NewMetricsHandler(s MetricStorage) *MetricHandler {
+func NewMetricsHandler(l *zap.Logger, s MetricStorage) *MetricHandler {
 	return &MetricHandler{
+		logger:  l,
 		storage: s,
 	}
 }
@@ -31,15 +37,18 @@ func (h *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
 	metricType := r.PathValue("metricType")
 	metricName := r.PathValue("metricName")
 
+	h.logger.Debug("", zap.String("path", r.URL.Path), zap.String("type", metricType), zap.String("name", metricName))
+
 	mt := models.ParseMetricType(metricType)
 	if mt == models.TypeUnknown {
-		log.Print("got unknown metric type\n\r")
+		h.logger.Error("got unknown metric type", zap.String("type", metricType), zap.String("scope", "handler/Get"))
 		rw.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	metric, err := h.storage.Get(ctx, metricName)
 	if err != nil {
+		h.logger.Error("get from storage", zap.Error(err), zap.String("scope", "handler/Get"))
 		rw.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -54,7 +63,7 @@ func (h *MetricHandler) GetAll(rw http.ResponseWriter, r *http.Request) {
 
 	metrics, err := h.storage.GetAll(ctx)
 	if err != nil {
-		log.Printf("get all metrics: %v", err)
+		h.logger.Error("get all metrics", zap.Error(err), zap.String("scope", "handler/GetAll"))
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -81,14 +90,14 @@ func (h *MetricHandler) Update(rw http.ResponseWriter, r *http.Request) {
 	metricValue := r.PathValue("metricValue")
 
 	if metricName == "" {
-		log.Print("got empty metric name\n\r")
+		h.logger.Error("got empty metric name", zap.String("scope", "handler/Update"))
 		rw.WriteHeader(http.StatusNotFound)
 		return
 	}
 
 	mt := models.ParseMetricType(metricType)
 	if mt == models.TypeUnknown {
-		log.Print("got unknown metric type\n\r")
+		h.logger.Error("got unknown metric type", zap.String("type", metricType), zap.String("scope", "handler/Update"))
 		rw.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -100,18 +109,155 @@ func (h *MetricHandler) Update(rw http.ResponseWriter, r *http.Request) {
 		},
 	}
 	if err := metric.SetValue(metricValue); err != nil {
-		log.Printf("set value [%v] for [%s]: %v\n\r", metricValue, metric.Name, err)
+		h.logger.Error("set value",
+			zap.String("value", metricValue),
+			zap.String("name", metric.Name),
+			zap.Error(err),
+			zap.String("scope", "handler/Update"))
 		rw.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	if err := h.storage.Store(ctx, metric); err != nil {
-		log.Printf("store error: %s\n\r", err.Error())
+		h.logger.Error("store error", zap.Error(err), zap.String("scope", "handler/Update"))
 		rw.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	log.Printf("successfully store [%+v]", metric)
+	h.logger.Info("successfully store", zap.Any("metric", metric), zap.String("scope", "handler/Update"))
 
 	rw.Header().Set("Content-Type", "text/plain")
 	rw.WriteHeader(http.StatusOK)
+}
+
+func (h *MetricHandler) UpdateViaBody(rw http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	m, err := buildUpdateRequest(r)
+	if err != nil {
+		h.logger.Error("store error", zap.Error(err), zap.String("scope", "handler/UpdateViaBody"))
+		rw.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if m.Name == "" {
+		h.logger.Error("got empty metric name", zap.String("scope", "handler/UpdateViaBody"))
+		rw.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	if err := h.storage.Store(ctx, m); err != nil {
+		h.logger.Error("store error", zap.Error(err), zap.String("scope", "handler/UpdateViaBody"))
+		rw.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	rw.Header().Set("Content-Type", "application/json")
+	rw.WriteHeader(http.StatusOK)
+}
+
+func (h *MetricHandler) GetViaBody(rw http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	req, err := buildGetRequest(r)
+	if err != nil {
+		h.logger.Error("store error", zap.Error(err), zap.String("scope", "handler/GetViaBody"))
+		rw.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" {
+		h.logger.Error("got empty metric name", zap.String("scope", "handler/GetViaBody"))
+		rw.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	m, err := h.storage.Get(ctx, req.Name)
+	if err != nil {
+		h.logger.Error("get from storage", zap.Error(err), zap.String("scope", "handler/GetViaBody"))
+		rw.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	response := buildResponse(m)
+
+	body, err := easyjson.Marshal(response)
+	if err != nil {
+		h.logger.Error("get from storage", zap.Error(err), zap.String("scope", "handler/GetViaBody"))
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	rw.Header().Set("Content-Type", "application/json")
+	rw.WriteHeader(http.StatusOK)
+	rw.Write(body)
+}
+
+func buildUpdateRequest(r *http.Request) (*models.Metric, error) {
+	body, err := io.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err != nil {
+		return nil, fmt.Errorf("can't read body: %w", err)
+	}
+	var req models.Metrics
+	if err := easyjson.Unmarshal(body, &req); err != nil {
+		return nil, fmt.Errorf("can't unmarshal request: %w", err)
+	}
+
+	m := &models.Metric{
+		Name: req.ID,
+	}
+
+	switch req.MType {
+	case "gauge":
+		m.Value.Type = models.TypeGauge
+	case "counter":
+		m.Value.Type = models.TypeCounter
+	default:
+		return nil, fmt.Errorf("unknown metric type: %s", req.MType)
+	}
+
+	return m, nil
+}
+
+func buildGetRequest(r *http.Request) (*models.Metric, error) {
+	body, err := io.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err != nil {
+		return nil, fmt.Errorf("can't read body: %w", err)
+	}
+	var req models.Metrics
+	if err := easyjson.Unmarshal(body, &req); err != nil {
+		return nil, fmt.Errorf("can't unmarshal request: %w", err)
+	}
+
+	m := &models.Metric{
+		Name: req.ID,
+	}
+
+	switch req.MType {
+	case "gauge":
+		m.Value.Type = models.TypeGauge
+	case "counter":
+		m.Value.Type = models.TypeCounter
+	default:
+		return nil, fmt.Errorf("unknown metric type: %s", req.MType)
+	}
+
+	return m, nil
+}
+
+func buildResponse(metric models.Metric) models.Metrics {
+	m := models.Metrics{
+		ID:    metric.Name,
+		MType: metric.Value.Type.String(),
+	}
+
+	switch metric.Value.Type {
+	case models.TypeGauge:
+		m.Value = &metric.Value.Gauge
+	case models.TypeCounter:
+		m.Delta = &metric.Value.Counter
+	}
+
+	return m
 }

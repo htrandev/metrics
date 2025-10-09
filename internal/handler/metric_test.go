@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	models "github.com/htrandev/metrics/internal/model"
+	"github.com/htrandev/metrics/pkg/logger"
 )
 
 var (
@@ -68,6 +70,9 @@ func (m *mockStorage) GetAll(context.Context) ([]models.Metric, error) {
 }
 
 func TestUpdateHandler(t *testing.T) {
+	log, err := logger.NewZapLogger("debug")
+	require.NoError(t, err)
+
 	testCases := []struct {
 		name         string
 		store        *mockStorage
@@ -118,7 +123,7 @@ func TestUpdateHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(tc.method, tc.url, nil)
 
-			h := NewMetricsHandler(tc.store)
+			h := NewMetricsHandler(log, tc.store)
 
 			mux := http.NewServeMux()
 			mux.HandleFunc("/update/{metricType}/{metricName}/{metricValue}", h.Update)
@@ -133,6 +138,9 @@ func TestUpdateHandler(t *testing.T) {
 }
 
 func TestGetHandler(t *testing.T) {
+	log, err := logger.NewZapLogger("debug")
+	require.NoError(t, err)
+
 	testCases := []struct {
 		name             string
 		storage          *mockStorage
@@ -183,7 +191,7 @@ func TestGetHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(tc.method, tc.url, nil)
 
-			h := NewMetricsHandler(tc.storage)
+			h := NewMetricsHandler(log, tc.storage)
 
 			mux := http.NewServeMux()
 			mux.HandleFunc("/value/{metricType}/{metricName}", h.Get)
@@ -197,11 +205,29 @@ func TestGetHandler(t *testing.T) {
 
 			require.EqualValues(t, tc.expectedCode, res.StatusCode)
 			require.EqualValues(t, tc.expectedResponse, string(body))
+
+			// h := NewMetricsHandler(log, tc.storage)
+			// handler := http.HandlerFunc(h.Get)
+			// srv := httptest.NewServer(handler)
+
+			// req := resty.New().R()
+			// req.Method = tc.method
+			// log.Info(srv.URL + tc.url)
+			// req.URL = srv.URL + tc.url
+
+			// resp, err := req.Send()
+			// assert.NoError(t, err, "error making HTTP request")
+
+			// require.EqualValues(t, tc.expectedCode, resp.StatusCode())
+			// require.EqualValues(t, tc.expectedResponse, string(resp.Body()))
 		})
 	}
 }
 
 func TestGetAll(t *testing.T) {
+	log, err := logger.NewZapLogger("debug")
+	require.NoError(t, err)
+
 	testCases := []struct {
 		name             string
 		storage          *mockStorage
@@ -237,29 +263,10 @@ func TestGetAll(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			{
-				// w := httptest.NewRecorder()
-				// r := httptest.NewRequest(tc.method, tc.url, nil)
-
-				// h := NewMetricsHandler(tc.storage)
-
-				// mux := http.NewServeMux()
-				// mux.HandleFunc("/", h.GetAll)
-				// mux.ServeHTTP(w, r)
-
-				// res := w.Result()
-				// defer res.Body.Close()
-
-				// body, err := io.ReadAll(res.Body)
-				// require.NoError(t, err)
-
-				// require.EqualValues(t, tc.expectedCode, res.StatusCode)
-				// require.EqualValues(t, tc.expectedResponse, string(body))
-			}
-
-			h := NewMetricsHandler(tc.storage)
+			h := NewMetricsHandler(log, tc.storage)
 			handler := http.HandlerFunc(h.GetAll)
 			srv := httptest.NewServer(handler)
+			defer srv.Close()
 
 			req := resty.New().R()
 			req.Method = tc.method
@@ -270,6 +277,191 @@ func TestGetAll(t *testing.T) {
 
 			require.Equal(t, tc.expectedCode, resp.StatusCode())
 			require.EqualValues(t, tc.expectedResponse, string(resp.Body()))
+		})
+	}
+}
+
+func TestUpdateViaBody(t *testing.T) {
+	log, err := logger.NewZapLogger("debug")
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name         string
+		storage      *mockStorage
+		method       string
+		expectedCode int
+		body         io.Reader
+	}{
+		{
+			name:         "valid counter",
+			storage:      &mockStorage{},
+			method:       http.MethodPost,
+			expectedCode: http.StatusOK,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"counter","type":"counter","value":1}`))
+			}(),
+		},
+		{
+			name:         "valid gauge",
+			storage:      &mockStorage{},
+			method:       http.MethodPost,
+			expectedCode: http.StatusOK,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"gauge","type":"gauge","value":0.1}`))
+			}(),
+		},
+		{
+			name:         "build request error",
+			storage:      &mockStorage{},
+			method:       http.MethodPost,
+			expectedCode: http.StatusBadRequest,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id:"gauge","type":"gauge","value":0.1}`))
+			}(),
+		},
+		{
+			name:         "empty name",
+			storage:      &mockStorage{},
+			method:       http.MethodPost,
+			expectedCode: http.StatusNotFound,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"","type":"gauge","value":0.1}`))
+			}(),
+		},
+		{
+			name:         "store error",
+			storage:      &mockStorage{storeErr: true},
+			method:       http.MethodPost,
+			expectedCode: http.StatusBadRequest,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"gauge","type":"gauge","value":0.1}`))
+			}(),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := NewMetricsHandler(log, tc.storage)
+			handler := http.HandlerFunc(h.UpdateViaBody)
+			srv := httptest.NewServer(handler)
+			defer srv.Close()
+
+			req := resty.New().R()
+			req.Method = http.MethodPost
+			req.URL = srv.URL
+			req.Body = tc.body
+
+			resp, err := req.Send()
+			assert.NoError(t, err, "error making HTTP request")
+
+			require.EqualValues(t, tc.expectedCode, resp.StatusCode())
+		})
+	}
+}
+
+func TestGetViaBody(t *testing.T) {
+	log, err := logger.NewZapLogger("debug")
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name         string
+		storage      *mockStorage
+		method       string
+		expectedCode int
+		body         io.Reader
+		expectedBody string
+	}{
+		{
+			name:         "valid gauge",
+			storage:      &mockStorage{gauge: true},
+			method:       http.MethodPost,
+			expectedCode: http.StatusOK,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"test","type":"gauge"}`))
+			}(),
+			expectedBody: func() string {
+				return `{"id":"test","type":"gauge","value":0.1}`
+			}(),
+		},
+		{
+			name:         "valid counter",
+			storage:      &mockStorage{gauge: false},
+			method:       http.MethodPost,
+			expectedCode: http.StatusOK,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"test","type":"counter"}`))
+			}(),
+			expectedBody: func() string {
+				return `{"id":"test","type":"counter","delta":1}`
+			}(),
+		},
+		{
+			name:         "unknown type",
+			storage:      &mockStorage{gauge: false},
+			method:       http.MethodPost,
+			expectedCode: http.StatusBadRequest,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"test","type":"test"}`))
+			}(),
+			expectedBody: func() string {
+				return ``
+			}(),
+		},
+		{
+			name:         "error build request",
+			storage:      &mockStorage{gauge: false},
+			method:       http.MethodPost,
+			expectedCode: http.StatusBadRequest,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id:"counter","type":"counter"}`))
+			}(),
+			expectedBody: func() string {
+				return ``
+			}(),
+		},
+		{
+			name:         "empty name",
+			storage:      &mockStorage{gauge: false},
+			method:       http.MethodPost,
+			expectedCode: http.StatusNotFound,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"","type":"counter"}`))
+			}(),
+			expectedBody: func() string {
+				return ``
+			}(),
+		},
+		{
+			name:         "get error",
+			storage:      &mockStorage{getErr: true},
+			method:       http.MethodPost,
+			expectedCode: http.StatusNotFound,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"test","type":"counter"}`))
+			}(),
+			expectedBody: func() string {
+				return ``
+			}(),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := NewMetricsHandler(log, tc.storage)
+			handler := http.HandlerFunc(h.GetViaBody)
+			srv := httptest.NewServer(handler)
+			defer srv.Close()
+
+			req := resty.New().R()
+			req.Method = http.MethodPost
+			req.URL = srv.URL
+			req.Body = tc.body
+
+			resp, err := req.Send()
+			assert.NoError(t, err, "error making HTTP request")
+
+			require.EqualValues(t, tc.expectedCode, resp.StatusCode())
+			require.EqualValues(t, tc.expectedBody, string(resp.Body()))
 		})
 	}
 }

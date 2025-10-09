@@ -10,11 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/htrandev/metrics/internal/handler"
-	"github.com/htrandev/metrics/internal/handler/middleware"
 	"github.com/htrandev/metrics/internal/repository"
+	"github.com/htrandev/metrics/internal/router"
+	"github.com/htrandev/metrics/pkg/logger"
 )
 
 func main() {
@@ -25,40 +24,28 @@ func main() {
 }
 
 func run() error {
-	log.Println("init config")
 	flags := parseFlags()
 
-	r := chi.NewRouter()
-
-	s := repository.NewMemStorageRepository()
-	metricHandler := handler.NewMetricsHandler(s)
-
-	lm, err := middleware.NewLogger("info")
+	zl, err := logger.NewZapLogger(flags.logLvl)
 	if err != nil {
 		return fmt.Errorf("init logger: %w", err)
 	}
+	zl.Info("init config")
 
-	r.With(
-		middleware.MethodChecker(http.MethodGet),
-		lm.Logger(),
-	).Get("/", metricHandler.GetAll)
+	s := repository.NewMemStorageRepository()
+	metricHandler := handler.NewMetricsHandler(zl, s)
 
-	r.With(
-		middleware.MethodChecker(http.MethodGet),
-		lm.Logger(),
-	).Get("/value/{metricType}/{metricName}", metricHandler.Get)
-
-	r.With(
-		middleware.MethodChecker(http.MethodPost),
-		lm.Logger(),
-	).Post("/update/{metricType}/{metricName}/{metricValue}", metricHandler.Update)
+	router, err := router.New(metricHandler)
+	if err != nil {
+		return fmt.Errorf("can't create new router: %w", err)
+	}
 
 	srv := http.Server{
 		Addr:    flags.addr,
-		Handler: r,
+		Handler: router,
 	}
 
-	log.Println("start serving")
+	zl.Info("start serving")
 	go func() {
 		if err := srv.ListenAndServe(); err != nil {
 			log.Fatalf("can't start server: %v", err)
