@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/url"
 	"os"
@@ -34,6 +36,7 @@ func run() error {
 
 	client := resty.New()
 	collection := models.NewCollection()
+	url := buildURL(conf.addr)
 
 	for {
 		var send bool
@@ -47,7 +50,7 @@ func run() error {
 
 		if send {
 			for _, metric := range metrics {
-				if err := sendMetric(client, conf.addr, metric); err != nil {
+				if err := sendMetric(client, url, metric); err != nil {
 					return fmt.Errorf("send metric: %w", err)
 				}
 			}
@@ -56,37 +59,30 @@ func run() error {
 
 }
 
-func sendMetric(client *resty.Client, addr string, metric models.Metric) error {
-	url, err := buildURL(addr)
-	if err != nil {
-		return fmt.Errorf("build url for [%+v]", metric)
-	}
-
+func sendMetric(client *resty.Client, url string, metric models.Metric) error {
 	req := buildRequest(metric)
 
-	_, err = client.R().
+	_, err := client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(req).
 		Post(url)
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("post: %w", err)
 	}
 	return nil
 }
 
-func buildURL(addr string) (string, error) {
+func buildURL(addr string) string {
 	u := url.URL{
 		Scheme: "http",
 		Host:   addr,
-	}
-	var err error
-	u.Path, err = url.JoinPath("update/")
-
-	if err != nil {
-		return "", fmt.Errorf("join path: %w", err)
+		Path:   "/update/",
 	}
 
-	return u.String(), nil
+	return u.String()
 }
 
 func buildRequest(metric models.Metric) models.Metrics {
