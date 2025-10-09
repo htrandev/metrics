@@ -210,10 +210,18 @@ func buildUpdateRequest(r *http.Request) (*models.Metric, error) {
 	switch req.MType {
 	case "gauge":
 		m.Value.Type = models.TypeGauge
-		m.Value.Gauge = *req.Value
+		if req.Value != nil {
+			m.Value.Gauge = *req.Value
+		} else {
+			return nil, fmt.Errorf("value for metric is nil")
+		}
 	case "counter":
 		m.Value.Type = models.TypeCounter
-		m.Value.Counter = *req.Delta
+		if req.Delta != nil {
+			m.Value.Counter = *req.Delta
+		} else {
+			return nil, fmt.Errorf("value for metric is nil")
+		}
 	default:
 		return nil, fmt.Errorf("unknown metric type: %s", req.MType)
 	}

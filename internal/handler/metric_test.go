@@ -205,21 +205,6 @@ func TestGetHandler(t *testing.T) {
 
 			require.EqualValues(t, tc.expectedCode, res.StatusCode)
 			require.EqualValues(t, tc.expectedResponse, string(body))
-
-			// h := NewMetricsHandler(log, tc.storage)
-			// handler := http.HandlerFunc(h.Get)
-			// srv := httptest.NewServer(handler)
-
-			// req := resty.New().R()
-			// req.Method = tc.method
-			// log.Info(srv.URL + tc.url)
-			// req.URL = srv.URL + tc.url
-
-			// resp, err := req.Send()
-			// assert.NoError(t, err, "error making HTTP request")
-
-			// require.EqualValues(t, tc.expectedCode, resp.StatusCode())
-			// require.EqualValues(t, tc.expectedResponse, string(resp.Body()))
 		})
 	}
 }
@@ -298,7 +283,7 @@ func TestUpdateViaBody(t *testing.T) {
 			method:       http.MethodPost,
 			expectedCode: http.StatusOK,
 			body: func() io.Reader {
-				return bytes.NewBuffer([]byte(`{"id":"counter","type":"counter","value":1}`))
+				return bytes.NewBuffer([]byte(`{"id":"counter","type":"counter","delta":1}`))
 			}(),
 		},
 		{
@@ -308,6 +293,24 @@ func TestUpdateViaBody(t *testing.T) {
 			expectedCode: http.StatusOK,
 			body: func() io.Reader {
 				return bytes.NewBuffer([]byte(`{"id":"gauge","type":"gauge","value":0.1}`))
+			}(),
+		},
+		{
+			name:         "empty counter",
+			storage:      &mockStorage{},
+			method:       http.MethodPost,
+			expectedCode: http.StatusBadRequest,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"counter","type":"counter"}`))
+			}(),
+		},
+		{
+			name:         "empty gauge",
+			storage:      &mockStorage{},
+			method:       http.MethodPost,
+			expectedCode: http.StatusBadRequest,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"gauge","type":"gauge"}`))
 			}(),
 		},
 		{
