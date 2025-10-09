@@ -44,7 +44,7 @@ func New(handler *handler.MetricHandler) (*chi.Mux, error) {
 		middleware.MethodChecker(http.MethodPost),
 		middleware.Logger(zl),
 		middleware.ContentType(),
-	).Post("/value", handler.GetViaBody)
+	).Post("/value/", handler.GetViaBody)
 
 	return r, nil
 }
