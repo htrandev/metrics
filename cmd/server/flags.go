@@ -20,7 +20,7 @@ func parseFlags() *flags {
 		f.addr = addr
 	}
 	if lvl := os.Getenv("LOG_LEVEL"); lvl != "" {
-		f.addr = lvl
+		f.logLvl = lvl
 	}
 
 	return &f
