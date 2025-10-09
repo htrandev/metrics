@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	models "github.com/htrandev/metrics/internal/model"
+	"github.com/mailru/easyjson"
 )
 
 func main() {
@@ -57,20 +58,30 @@ func run() error {
 }
 
 func sendMetric(client *resty.Client, addr string, metric models.Metric) error {
-	url, err := buildURL(addr, metric)
+	url, err := buildURL(addr)
 	if err != nil {
 		return fmt.Errorf("build url for [%+v]", metric)
 	}
 
 	req := buildRequest(metric)
-	_, err = client.R().SetBody(req).Post(url)
+	log.Printf("send metric: [%+v] type: %s", req, req.MType)
+
+	body, err := easyjson.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal: %w", err)
+	}
+
+	_, err = client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(body).
+		Post(url)
 	if err != nil {
 		return fmt.Errorf("post: %w", err)
 	}
 	return nil
 }
 
-func buildURL(addr string, m models.Metric) (string, error) {
+func buildURL(addr string) (string, error) {
 	u := url.URL{
 		Scheme: "http",
 		Host:   addr,
@@ -82,7 +93,6 @@ func buildURL(addr string, m models.Metric) (string, error) {
 		return "", fmt.Errorf("join path: %w", err)
 	}
 
-	log.Printf("send metric: [%+v] type: %s", m, m.Value.Type)
 	return u.String(), nil
 }
 

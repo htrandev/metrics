@@ -150,6 +150,7 @@ func (h *MetricHandler) UpdateViaBody(rw http.ResponseWriter, r *http.Request) {
 		rw.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	h.logger.Info("successfully stored")
 
 	rw.Header().Set("Content-Type", "application/json")
 	rw.WriteHeader(http.StatusOK)
