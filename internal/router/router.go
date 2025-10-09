@@ -37,13 +37,13 @@ func New(handler *handler.MetricHandler) (*chi.Mux, error) {
 	r.With(
 		middleware.MethodChecker(http.MethodPost),
 		middleware.Logger(zl),
-		middleware.ContentType(),
+		// middleware.ContentType(),
 	).Post("/update/", handler.UpdateViaBody)
 
 	r.With(
 		middleware.MethodChecker(http.MethodPost),
 		middleware.Logger(zl),
-		middleware.ContentType(),
+		// middleware.ContentType(),
 	).Post("/value/", handler.GetViaBody)
 
 	return r, nil
