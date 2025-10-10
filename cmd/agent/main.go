@@ -49,6 +49,7 @@ func run() error {
 		metrics := collection.Collect()
 
 		if send {
+			log.Println("send metrics")
 			for _, metric := range metrics {
 				if err := sendMetric(client, url, metric); err != nil {
 					return fmt.Errorf("send metric: %w", err)

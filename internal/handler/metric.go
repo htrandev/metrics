@@ -181,12 +181,6 @@ func (h *MetricHandler) GetViaBody(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	all, err := h.storage.GetAll(ctx)
-	if err != nil {
-		h.logger.Error("get all storage", zap.Error(err), zap.String("scope", "handler/GetViaBody"))
-	}
-	h.logger.Info("", zap.Any("all", all))
-
 	m, err := h.storage.Get(ctx, req.Name)
 	if err != nil {
 		h.logger.Error("get from storage", zap.Error(err), zap.String("scope", "handler/GetViaBody"))
