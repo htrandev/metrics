@@ -5,8 +5,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/htrandev/metrics/pkg/logger"
 	"github.com/stretchr/testify/require"
+
+	"github.com/htrandev/metrics/pkg/logger"
 )
 
 func TestLogger(t *testing.T) {

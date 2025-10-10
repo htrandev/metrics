@@ -10,11 +10,12 @@ import (
 	"syscall"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/htrandev/metrics/internal/handler"
 	"github.com/htrandev/metrics/internal/repository"
 	"github.com/htrandev/metrics/internal/router"
 	"github.com/htrandev/metrics/pkg/logger"
-	"go.uber.org/zap"
 )
 
 func main() {
@@ -36,7 +37,7 @@ func run() error {
 	s := repository.NewMemStorageRepository()
 	metricHandler := handler.NewMetricsHandler(zl, s)
 
-	router, err := router.New(metricHandler)
+	router, err := router.New(zl, metricHandler)
 	if err != nil {
 		return fmt.Errorf("can't create new router: %w", err)
 	}
@@ -50,7 +51,7 @@ func run() error {
 	zl.Info("start serving")
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			zl.Error("can't start server", zap.Error(err))
+			log.Fatalf("can't start server: %v", err)
 		}
 	}()
 

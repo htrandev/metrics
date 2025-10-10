@@ -1,48 +1,42 @@
 package router
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 
 	"github.com/htrandev/metrics/internal/handler"
 	"github.com/htrandev/metrics/internal/handler/middleware"
-	"github.com/htrandev/metrics/pkg/logger"
 )
 
-func New(handler *handler.MetricHandler) (*chi.Mux, error) {
+func New(logger *zap.Logger, handler *handler.MetricHandler) (*chi.Mux, error) {
 	r := chi.NewRouter()
-
-	zl, err := logger.NewZapLogger("error")
-	if err != nil {
-		return nil, fmt.Errorf("init logger: %w", err)
-	}
 
 	r.With(
 		middleware.MethodChecker(http.MethodGet),
-		middleware.Logger(zl),
+		middleware.Logger(logger),
 	).Get("/", handler.GetAll)
 
 	r.With(
 		middleware.MethodChecker(http.MethodGet),
-		middleware.Logger(zl),
+		middleware.Logger(logger),
 	).Get("/value/{metricType}/{metricName}", handler.Get)
 
 	r.With(
 		middleware.MethodChecker(http.MethodPost),
-		middleware.Logger(zl),
+		middleware.Logger(logger),
 	).Post("/update/{metricType}/{metricName}/{metricValue}", handler.Update)
 
 	r.With(
 		middleware.MethodChecker(http.MethodPost),
-		middleware.Logger(zl),
+		middleware.Logger(logger),
 		middleware.ContentType(),
 	).Post("/update/", handler.UpdateViaBody)
 
 	r.With(
 		middleware.MethodChecker(http.MethodPost),
-		middleware.Logger(zl),
+		middleware.Logger(logger),
 		middleware.ContentType(),
 	).Post("/value/", handler.GetViaBody)
 

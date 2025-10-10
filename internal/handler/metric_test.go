@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	models "github.com/htrandev/metrics/internal/model"
+	"github.com/htrandev/metrics/internal/model"
 	"github.com/htrandev/metrics/pkg/logger"
 )
 
@@ -35,31 +35,31 @@ type mockStorage struct {
 
 var _ MetricStorage = (*mockStorage)(nil)
 
-func (m *mockStorage) Store(context.Context, *models.Metric) error {
+func (m *mockStorage) Store(context.Context, *model.Metric) error {
 	if m.storeErr {
 		return errStore
 	}
 	return nil
 }
 
-func (m *mockStorage) Get(context.Context, string) (models.Metric, error) {
+func (m *mockStorage) Get(context.Context, string) (model.Metric, error) {
 	if m.getErr {
-		return models.Metric{}, errGet
+		return model.Metric{}, errGet
 	}
-	metric := models.Metric{Name: "test"}
+	metric := model.Metric{Name: "test"}
 	if m.gauge {
-		metric.Value.Type = models.TypeGauge
+		metric.Value.Type = model.TypeGauge
 		metric.Value.Gauge = 0.1
 		return metric, nil
 	}
 
-	metric.Value.Type = models.TypeCounter
+	metric.Value.Type = model.TypeCounter
 	metric.Value.Counter = 1
 
 	return metric, nil
 }
 
-func (m *mockStorage) GetAll(context.Context) ([]models.Metric, error) {
+func (m *mockStorage) GetAll(context.Context) ([]model.Metric, error) {
 	if m.getAll {
 		return nil, errGetAll
 	}
@@ -469,19 +469,19 @@ func TestGetViaBody(t *testing.T) {
 	}
 }
 
-func filledStorage() []models.Metric {
-	metrics := []models.Metric{
+func filledStorage() []model.Metric {
+	metrics := []model.Metric{
 		{
 			Name: "gauge",
-			Value: models.MetricValue{
-				Type:  models.TypeGauge,
+			Value: model.MetricValue{
+				Type:  model.TypeGauge,
 				Gauge: 0.1,
 			},
 		},
 		{
 			Name: "counter",
-			Value: models.MetricValue{
-				Type:    models.TypeCounter,
+			Value: model.MetricValue{
+				Type:    model.TypeCounter,
 				Counter: 1,
 			},
 		},

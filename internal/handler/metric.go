@@ -10,13 +10,13 @@ import (
 	"github.com/mailru/easyjson"
 	"go.uber.org/zap"
 
-	models "github.com/htrandev/metrics/internal/model"
+	"github.com/htrandev/metrics/internal/model"
 )
 
 type MetricStorage interface {
-	Get(context.Context, string) (models.Metric, error)
-	GetAll(context.Context) ([]models.Metric, error)
-	Store(context.Context, *models.Metric) error
+	Get(context.Context, string) (model.Metric, error)
+	GetAll(context.Context) ([]model.Metric, error)
+	Store(context.Context, *model.Metric) error
 }
 
 type MetricHandler struct {
@@ -37,8 +37,8 @@ func (h *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
 	metricType := r.PathValue("metricType")
 	metricName := r.PathValue("metricName")
 
-	mt := models.ParseMetricType(metricType)
-	if mt == models.TypeUnknown {
+	mt := model.ParseMetricType(metricType)
+	if mt == model.TypeUnknown {
 		h.logger.Error("got unknown metric type", zap.String("type", metricType), zap.String("scope", "handler/Get"))
 		rw.WriteHeader(http.StatusBadRequest)
 		return
@@ -93,16 +93,16 @@ func (h *MetricHandler) Update(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mt := models.ParseMetricType(metricType)
-	if mt == models.TypeUnknown {
+	mt := model.ParseMetricType(metricType)
+	if mt == model.TypeUnknown {
 		h.logger.Error("got unknown metric type", zap.String("type", metricType), zap.String("scope", "handler/Update"))
 		rw.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	metric := &models.Metric{
+	metric := &model.Metric{
 		Name: metricName,
-		Value: models.MetricValue{
+		Value: model.MetricValue{
 			Type: mt,
 		},
 	}
@@ -208,31 +208,31 @@ func (h *MetricHandler) GetViaBody(rw http.ResponseWriter, r *http.Request) {
 	rw.Write(body)
 }
 
-func buildUpdateRequest(r *http.Request) (*models.Metric, error) {
+func buildUpdateRequest(r *http.Request) (*model.Metric, error) {
 	body, err := io.ReadAll(r.Body)
 	defer r.Body.Close()
 	if err != nil {
 		return nil, fmt.Errorf("can't read body: %w", err)
 	}
-	var req models.Metrics
+	var req model.Metrics
 	if err := easyjson.Unmarshal(body, &req); err != nil {
 		return nil, fmt.Errorf("can't unmarshal request: %w", err)
 	}
 
-	m := &models.Metric{
+	m := &model.Metric{
 		Name: req.ID,
 	}
 
 	switch req.MType {
 	case "gauge":
-		m.Value.Type = models.TypeGauge
+		m.Value.Type = model.TypeGauge
 		if req.Value != nil {
 			m.Value.Gauge = *req.Value
 		} else {
 			return nil, fmt.Errorf("value for metric is nil")
 		}
 	case "counter":
-		m.Value.Type = models.TypeCounter
+		m.Value.Type = model.TypeCounter
 		if req.Delta != nil {
 			m.Value.Counter = *req.Delta
 		} else {
@@ -245,26 +245,26 @@ func buildUpdateRequest(r *http.Request) (*models.Metric, error) {
 	return m, nil
 }
 
-func buildGetRequest(r *http.Request) (*models.Metric, error) {
+func buildGetRequest(r *http.Request) (*model.Metric, error) {
 	body, err := io.ReadAll(r.Body)
 	defer r.Body.Close()
 	if err != nil {
 		return nil, fmt.Errorf("can't read body: %w", err)
 	}
-	var req models.Metrics
+	var req model.Metrics
 	if err := easyjson.Unmarshal(body, &req); err != nil {
 		return nil, fmt.Errorf("can't unmarshal request: %w", err)
 	}
 
-	m := &models.Metric{
+	m := &model.Metric{
 		Name: req.ID,
 	}
 
 	switch req.MType {
 	case "gauge":
-		m.Value.Type = models.TypeGauge
+		m.Value.Type = model.TypeGauge
 	case "counter":
-		m.Value.Type = models.TypeCounter
+		m.Value.Type = model.TypeCounter
 	default:
 		return nil, fmt.Errorf("unknown metric type: %s", req.MType)
 	}
@@ -272,16 +272,16 @@ func buildGetRequest(r *http.Request) (*models.Metric, error) {
 	return m, nil
 }
 
-func buildResponse(metric models.Metric) models.Metrics {
-	m := models.Metrics{
+func buildResponse(metric model.Metric) model.Metrics {
+	m := model.Metrics{
 		ID:    metric.Name,
 		MType: metric.Value.Type.String(),
 	}
 
 	switch metric.Value.Type {
-	case models.TypeGauge:
+	case model.TypeGauge:
 		m.Value = &metric.Value.Gauge
-	case models.TypeCounter:
+	case model.TypeCounter:
 		m.Delta = &metric.Value.Counter
 	}
 

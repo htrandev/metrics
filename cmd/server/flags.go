@@ -13,7 +13,7 @@ type flags struct {
 func parseFlags() *flags {
 	var f flags
 	flag.StringVar(&f.addr, "a", "localhost:8080", "address to run server")
-	flag.StringVar(&f.logLvl, "lvl", "error", "log level")
+	flag.StringVar(&f.logLvl, "lvl", "debug", "log level")
 	flag.Parse()
 
 	if addr := os.Getenv("ADDRESS"); addr != "" {
