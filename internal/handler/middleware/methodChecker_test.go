@@ -9,11 +9,7 @@ import (
 )
 
 func TestMethodChecker(t *testing.T) {
-	dummyHandler := func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}
-
-	handler := http.HandlerFunc(dummyHandler)
+	dummyHandler := dummyHandler()
 
 	testCases := []struct {
 		name         string
@@ -40,7 +36,7 @@ func TestMethodChecker(t *testing.T) {
 			rec := httptest.NewRecorder()
 
 			wrapper := MethodChecker(tc.method)
-			wrapper(handler).ServeHTTP(rec, tc.req)
+			wrapper(dummyHandler).ServeHTTP(rec, tc.req)
 
 			require.Equal(t, tc.expectedCode, rec.Code)
 		})

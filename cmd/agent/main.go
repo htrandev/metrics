@@ -1,11 +1,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/url"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -21,7 +22,10 @@ func main() {
 
 func run() error {
 	log.Println("init config")
-	conf := parseFlags()
+	conf, err := parseFlags()
+	if err != nil {
+		return fmt.Errorf("parse flags: %w", err)
+	}
 
 	log.Println("init tickers")
 	poolTicker := time.NewTicker(conf.pollInterval)
@@ -32,6 +36,7 @@ func run() error {
 
 	client := resty.New()
 	collection := models.NewCollection()
+	url := buildURL(conf.addr)
 
 	for {
 		var send bool
@@ -44,9 +49,11 @@ func run() error {
 		metrics := collection.Collect()
 
 		if send {
+			log.Println("send metrics")
 			for _, metric := range metrics {
-				if err := sendMetric(client, conf.addr, metric); err != nil {
-					return fmt.Errorf("send metric: %w", err)
+				if err := sendMetric(client, url, metric); err != nil {
+					log.Printf("send metric [%+v]: %v", metric, err)
+					// return fmt.Errorf("send metric: %w", err)
 				}
 			}
 		}
@@ -54,37 +61,44 @@ func run() error {
 
 }
 
-func sendMetric(client *resty.Client, addr string, metric models.Metric) error {
-	url, err := buildURL(addr, metric)
-	if err != nil {
-		return fmt.Errorf("build url for [%+v]", metric)
-	}
+func sendMetric(client *resty.Client, url string, metric models.Metric) error {
+	req := buildRequest(metric)
 
-	_, err = client.R().Post(url)
+	_, err := client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(req).
+		Post(url)
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("post: %w", err)
 	}
 	return nil
 }
 
-func buildURL(addr string, m models.Metric) (string, error) {
+func buildURL(addr string) string {
 	u := url.URL{
 		Scheme: "http",
 		Host:   addr,
+		Path:   "/update/",
 	}
-	var err error
 
-	switch m.Value.Type {
+	return u.String()
+}
+
+func buildRequest(metric models.Metric) models.Metrics {
+	m := models.Metrics{
+		ID:    metric.Name,
+		MType: metric.Value.Type.String(),
+	}
+
+	switch metric.Value.Type {
 	case models.TypeGauge:
-		u.Path, err = url.JoinPath("update", m.Value.Type.String(), m.Name, strconv.FormatFloat(m.Value.Gauge, 'f', -1, 64))
+		m.Value = &metric.Value.Gauge
 	case models.TypeCounter:
-		u.Path, err = url.JoinPath("update", m.Value.Type.String(), m.Name, strconv.FormatInt(m.Value.Counter, 10))
+		m.Delta = &metric.Value.Counter
 	}
 
-	if err != nil {
-		return "", fmt.Errorf("join path: %w", err)
-	}
-
-	log.Printf("send metric: [%+v] type: %s", m, m.Value.Type)
-	return u.String(), nil
+	return m
 }
