@@ -245,6 +245,7 @@ func buildGetRequest(r *http.Request) (*model.Metric, error) {
 	if err != nil {
 		return nil, fmt.Errorf("can't read body: %w", err)
 	}
+
 	var req model.Metrics
 	if err := easyjson.Unmarshal(body, &req); err != nil {
 		return nil, fmt.Errorf("can't unmarshal request: %w", err)
