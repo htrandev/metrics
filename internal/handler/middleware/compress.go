@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 )
 
@@ -65,6 +66,13 @@ func (c *compressReader) Close() error {
 	return c.zr.Close()
 }
 
+var (
+	acceptable = []string{
+		"application/json",
+		"text/html",
+	}
+)
+
 func Compress() func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -78,19 +86,31 @@ func Compress() func(next http.Handler) http.Handler {
 				defer cw.Close()
 			}
 
-			contentEncoding := r.Header.Get("Content-Encoding")
-			sendsGzip := strings.Contains(contentEncoding, "gzip")
-			if sendsGzip {
-				cr, err := newCompressReader(r.Body)
-				if err != nil {
-					w.WriteHeader(http.StatusInternalServerError)
-					return
+			contentTypes := r.Header.Values("Content-Type")
+			if contains(contentTypes, acceptable...) {
+				contentEncoding := r.Header.Get("Content-Encoding")
+				sendsGzip := strings.Contains(contentEncoding, "gzip")
+				if sendsGzip {
+					cr, err := newCompressReader(r.Body)
+					if err != nil {
+						w.WriteHeader(http.StatusInternalServerError)
+						return
+					}
+					r.Body = cr
+					defer cr.Close()
 				}
-				r.Body = cr
-				defer cr.Close()
 			}
 
 			next.ServeHTTP(ow, r)
 		})
 	}
+}
+
+func contains(s []string, elems ...string) bool {
+	for _, elem := range elems {
+		if slices.Contains(s, elem) {
+			return true
+		}
+	}
+	return false
 }
