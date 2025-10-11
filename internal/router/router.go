@@ -16,6 +16,7 @@ func New(logger *zap.Logger, handler *handler.MetricHandler) (*chi.Mux, error) {
 	r.With(
 		middleware.MethodChecker(http.MethodGet),
 		middleware.Logger(logger),
+		middleware.Compress(),
 	).Get("/", handler.GetAll)
 
 	r.With(
