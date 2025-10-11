@@ -10,11 +10,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 
 	"github.com/htrandev/metrics/internal/handler"
-	"github.com/htrandev/metrics/internal/handler/middleware"
 	"github.com/htrandev/metrics/internal/repository"
+	"github.com/htrandev/metrics/internal/router"
+	"github.com/htrandev/metrics/pkg/logger"
 )
 
 func main() {
@@ -25,29 +26,31 @@ func main() {
 }
 
 func run() error {
-	log.Println("init config")
 	flags := parseFlags()
 
-	r := chi.NewRouter()
+	zl, err := logger.NewZapLogger(flags.logLvl)
+	if err != nil {
+		return fmt.Errorf("init logger: %w", err)
+	}
+	zl.Info("init config")
 
 	s := repository.NewMemStorageRepository()
-	metricHandler := handler.NewMetricsHandler(s)
+	metricHandler := handler.NewMetricsHandler(zl, s)
 
-	log.Println("start serving")
-	r.With(middleware.MethodChecker(http.MethodGet)).
-		Get("/", metricHandler.GetAll)
-	r.With(middleware.MethodChecker(http.MethodGet)).
-		Get("/value/{metricType}/{metricName}", metricHandler.Get)
-	r.With(middleware.MethodChecker(http.MethodPost)).
-		Post("/update/{metricType}/{metricName}/{metricValue}", metricHandler.Update)
-
-	srv := http.Server{
-		Addr:    flags.addr,
-		Handler: r,
+	router, err := router.New(zl, metricHandler)
+	if err != nil {
+		return fmt.Errorf("can't create new router: %w", err)
 	}
 
+	zl.Info("", zap.String("addr", flags.addr))
+	srv := http.Server{
+		Addr:    flags.addr,
+		Handler: router,
+	}
+
+	zl.Info("start serving")
 	go func() {
-		if err := srv.ListenAndServe(); err != nil {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("can't start server: %v", err)
 		}
 	}()

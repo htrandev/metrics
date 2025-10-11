@@ -1,15 +1,20 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/url"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/go-resty/resty/v2"
-	models "github.com/htrandev/metrics/internal/model"
+	"github.com/mailru/easyjson"
+
+	"github.com/htrandev/metrics/internal/model"
 )
 
 func main() {
@@ -21,7 +26,10 @@ func main() {
 
 func run() error {
 	log.Println("init config")
-	conf := parseFlags()
+	conf, err := parseFlags()
+	if err != nil {
+		return fmt.Errorf("parse flags: %w", err)
+	}
 
 	log.Println("init tickers")
 	poolTicker := time.NewTicker(conf.pollInterval)
@@ -31,7 +39,8 @@ func run() error {
 	defer reportTicker.Stop()
 
 	client := resty.New()
-	collection := models.NewCollection()
+	collection := model.NewCollection()
+	url := buildURL(conf.addr)
 
 	for {
 		var send bool
@@ -44,9 +53,10 @@ func run() error {
 		metrics := collection.Collect()
 
 		if send {
+			log.Println("send metrics")
 			for _, metric := range metrics {
-				if err := sendMetric(client, conf.addr, metric); err != nil {
-					return fmt.Errorf("send metric: %w", err)
+				if err := sendMetric(client, url, metric); err != nil {
+					log.Printf("can't send metric [%+v]: %v", metric, err)
 				}
 			}
 		}
@@ -54,37 +64,65 @@ func run() error {
 
 }
 
-func sendMetric(client *resty.Client, addr string, metric models.Metric) error {
-	url, err := buildURL(addr, metric)
+func sendMetric(client *resty.Client, url string, metric model.Metric) error {
+	req := buildRequest(metric)
+	body, err := buildBody(req)
 	if err != nil {
-		return fmt.Errorf("build url for [%+v]", metric)
+		return fmt.Errorf("build body: %w", err)
 	}
 
-	_, err = client.R().Post(url)
+	_, err = client.R().
+		SetHeader("Content-Type", "application/json").
+		SetHeader("Content-Encoding", "gzip").
+		SetBody(body).
+		Post(url)
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("post: %w", err)
 	}
 	return nil
 }
 
-func buildURL(addr string, m models.Metric) (string, error) {
+func buildURL(addr string) string {
 	u := url.URL{
 		Scheme: "http",
 		Host:   addr,
-	}
-	var err error
-
-	switch m.Value.Type {
-	case models.TypeGauge:
-		u.Path, err = url.JoinPath("update", m.Value.Type.String(), m.Name, strconv.FormatFloat(m.Value.Gauge, 'f', -1, 64))
-	case models.TypeCounter:
-		u.Path, err = url.JoinPath("update", m.Value.Type.String(), m.Name, strconv.FormatInt(m.Value.Counter, 10))
+		Path:   "/update/",
 	}
 
+	return u.String()
+}
+
+func buildRequest(metric model.Metric) model.Metrics {
+	m := model.Metrics{
+		ID:    metric.Name,
+		MType: metric.Value.Type.String(),
+	}
+
+	switch metric.Value.Type {
+	case model.TypeGauge:
+		m.Value = &metric.Value.Gauge
+	case model.TypeCounter:
+		m.Delta = &metric.Value.Counter
+	}
+
+	return m
+}
+
+func buildBody(m model.Metrics) ([]byte, error) {
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+
+	p, err := easyjson.Marshal(m)
 	if err != nil {
-		return "", fmt.Errorf("join path: %w", err)
+		return nil, fmt.Errorf("can't marshal metrics: %w", err)
 	}
-
-	log.Printf("send metric: [%+v] type: %s", m, m.Value.Type)
-	return u.String(), nil
+	_, err = gz.Write(p)
+	if err != nil {
+		return nil, fmt.Errorf("can't write: %w", err)
+	}
+	gz.Close()
+	return buf.Bytes(), nil
 }
