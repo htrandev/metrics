@@ -75,7 +75,7 @@ func (h *MetricHandler) GetAll(rw http.ResponseWriter, r *http.Request) {
 		builder.WriteString("\r")
 	}
 
-	rw.Header().Set("Content-Type", "text/plain")
+	rw.Header().Set("Content-Type", "text/html")
 	rw.WriteHeader(http.StatusOK)
 	rw.Write([]byte(builder.String()))
 }
