@@ -52,7 +52,8 @@ func run() error {
 			log.Println("send metrics")
 			for _, metric := range metrics {
 				if err := sendMetric(client, url, metric); err != nil {
-					return fmt.Errorf("send metric: %w", err)
+					log.Printf("send metric [%+v]: %v", metric, err)
+					// return fmt.Errorf("send metric: %w", err)
 				}
 			}
 		}
