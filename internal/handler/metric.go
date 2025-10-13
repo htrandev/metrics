@@ -127,24 +127,24 @@ func (h *MetricHandler) Update(rw http.ResponseWriter, r *http.Request) {
 	rw.WriteHeader(http.StatusOK)
 }
 
-func (h *MetricHandler) UpdateJson(rw http.ResponseWriter, r *http.Request) {
+func (h *MetricHandler) UpdateJSON(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	m, err := buildUpdateRequest(r)
 	if err != nil {
-		h.logger.Error("store error", zap.Error(err), zap.String("scope", "handler/UpdateJson"))
+		h.logger.Error("store error", zap.Error(err), zap.String("scope", "handler/UpdateJSON"))
 		rw.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	if m.Name == "" {
-		h.logger.Error("got empty metric name", zap.String("scope", "handler/UpdateJson"))
+		h.logger.Error("got empty metric name", zap.String("scope", "handler/UpdateJSON"))
 		rw.WriteHeader(http.StatusNotFound)
 		return
 	}
 
 	if err := h.storage.Store(ctx, m); err != nil {
-		h.logger.Error("store error", zap.Error(err), zap.String("scope", "handler/UpdateJson"))
+		h.logger.Error("store error", zap.Error(err), zap.String("scope", "handler/UpdateJSON"))
 		rw.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -154,7 +154,7 @@ func (h *MetricHandler) UpdateJson(rw http.ResponseWriter, r *http.Request) {
 
 	body, err := easyjson.Marshal(response)
 	if err != nil {
-		h.logger.Error("get from storage", zap.Error(err), zap.String("scope", "handler/UpdateJson"))
+		h.logger.Error("get from storage", zap.Error(err), zap.String("scope", "handler/UpdateJSON"))
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
