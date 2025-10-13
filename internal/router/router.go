@@ -34,14 +34,14 @@ func New(logger *zap.Logger, handler *handler.MetricHandler) (*chi.Mux, error) {
 		middleware.Logger(logger),
 		middleware.ContentType(),
 		middleware.Compress(),
-	).Post("/update/", handler.UpdateViaBody)
+	).Post("/update/", handler.UpdateJson)
 
 	r.With(
 		middleware.MethodChecker(http.MethodPost),
 		middleware.Logger(logger),
 		middleware.ContentType(),
 		middleware.Compress(),
-	).Post("/value/", handler.GetViaBody)
+	).Post("/value/", handler.GetJson)
 
 	return r, nil
 }

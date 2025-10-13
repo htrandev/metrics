@@ -345,7 +345,7 @@ func TestUpdateViaBody(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			h := NewMetricsHandler(log, tc.storage)
-			handler := http.HandlerFunc(h.UpdateViaBody)
+			handler := http.HandlerFunc(h.UpdateJson)
 			srv := httptest.NewServer(handler)
 			defer srv.Close()
 
@@ -451,7 +451,7 @@ func TestGetViaBody(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			h := NewMetricsHandler(log, tc.storage)
-			handler := http.HandlerFunc(h.GetViaBody)
+			handler := http.HandlerFunc(h.GetJson)
 			srv := httptest.NewServer(handler)
 			defer srv.Close()
 
