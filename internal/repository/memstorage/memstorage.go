@@ -1,4 +1,4 @@
-package repository
+package memstorage
 
 import (
 	"context"
@@ -13,7 +13,7 @@ type MemStorage struct {
 	metrics map[string]model.Metric
 }
 
-func NewMemStorageRepository() *MemStorage {
+func NewRepository() *MemStorage {
 	metrics := make(map[string]model.Metric)
 	return &MemStorage{
 		metrics: metrics,

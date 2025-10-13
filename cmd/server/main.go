@@ -10,11 +10,11 @@ import (
 	"syscall"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/htrandev/metrics/internal/handler"
-	"github.com/htrandev/metrics/internal/repository"
+	"github.com/htrandev/metrics/internal/repository/file"
+	"github.com/htrandev/metrics/internal/repository/memstorage"
 	"github.com/htrandev/metrics/internal/router"
+	"github.com/htrandev/metrics/internal/service/restore"
 	"github.com/htrandev/metrics/pkg/logger"
 )
 
@@ -26,23 +26,63 @@ func main() {
 }
 
 func run() error {
-	flags := parseFlags()
+	flags, err := parseFlags()
+	if err != nil {
+		return fmt.Errorf("parse flags: %w", err)
+	}
 
 	zl, err := logger.NewZapLogger(flags.logLvl)
 	if err != nil {
 		return fmt.Errorf("init logger: %w", err)
 	}
-	zl.Info("init config")
 
-	s := repository.NewMemStorageRepository()
-	metricHandler := handler.NewMetricsHandler(zl, s)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
+	zl.Info("init mem storage")
+	memStorageRepository := memstorage.NewRepository()
+
+	zl.Info("init file storage")
+	fileRepository, err := file.NewRepository(flags.filePath)
+	if err != nil {
+		return fmt.Errorf("init file repository: %w", err)
+	}
+	defer func() { _ = fileRepository.Close() }()
+
+	zl.Info("init handler")
+	metricHandler := handler.NewMetricsHandler(
+		zl,
+		memStorageRepository,
+		fileRepository,
+		flags.storeInterval,
+	)
+
+	zl.Info("run flusher")
+	go metricHandler.Run(ctx)
+
+	if flags.restore {
+		zl.Info("restore previous metrics")
+		restoreService, err := restore.NewService(flags.filePath, memStorageRepository, zl)
+		if err != nil {
+			return fmt.Errorf("init restore service: %w", err)
+		}
+		defer func() { _ = restoreService.Close() }()
+
+		restoreCtx, restoreCancel := context.WithTimeout(ctx, 1*time.Minute)
+		defer restoreCancel()
+
+		if err := restoreService.Restore(restoreCtx); err != nil {
+			return fmt.Errorf("can't restore metrics ferom file: %w", err)
+		}
+
+	}
+
+	zl.Info("init router")
 	router, err := router.New(zl, metricHandler)
 	if err != nil {
 		return fmt.Errorf("can't create new router: %w", err)
 	}
 
-	zl.Info("", zap.String("addr", flags.addr))
 	srv := http.Server{
 		Addr:    flags.addr,
 		Handler: router,
@@ -60,10 +100,10 @@ func run() error {
 
 	<-stop
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	shutDownCtx, shutDownCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer shutDownCancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := srv.Shutdown(shutDownCtx); err != nil {
 		return fmt.Errorf("shutdown server: %w", err)
 	}
 	return nil

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/mailru/easyjson"
 	"go.uber.org/zap"
@@ -13,21 +14,62 @@ import (
 	"github.com/htrandev/metrics/internal/model"
 )
 
+const defaultInterval = 300 * time.Second
+
 type MetricStorage interface {
 	Get(context.Context, string) (model.Metric, error)
 	GetAll(context.Context) ([]model.Metric, error)
 	Store(context.Context, *model.Metric) error
 }
 
-type MetricHandler struct {
-	logger  *zap.Logger
-	storage MetricStorage
+type FileStorage interface {
+	Flush(context.Context, []model.Metric) error
 }
 
-func NewMetricsHandler(l *zap.Logger, s MetricStorage) *MetricHandler {
+type MetricHandler struct {
+	storeInterval time.Duration
+
+	storage MetricStorage
+	flusher FileStorage
+	logger  *zap.Logger
+}
+
+func NewMetricsHandler(
+	l *zap.Logger,
+	s MetricStorage,
+	flusher FileStorage,
+	interval time.Duration,
+) *MetricHandler {
+	if interval == 0 {
+		interval = defaultInterval
+	}
 	return &MetricHandler{
-		logger:  l,
-		storage: s,
+		logger:        l,
+		storage:       s,
+		flusher:       flusher,
+		storeInterval: interval,
+	}
+}
+
+func (h *MetricHandler) Run(ctx context.Context) {
+	ticker := time.NewTicker(h.storeInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			metrics, err := h.storage.GetAll(ctx)
+			if err != nil {
+				h.logger.Error("get all metrics to flush", zap.Error(err), zap.String("scope", "Run"))
+				continue
+			}
+			if err := h.flusher.Flush(ctx, metrics); err != nil {
+				h.logger.Error("flush metrics", zap.Error(err), zap.String("scope", "Run"))
+				continue
+			}
+		}
 	}
 }
 
@@ -204,10 +246,11 @@ func (h *MetricHandler) GetJSON(rw http.ResponseWriter, r *http.Request) {
 
 func buildUpdateRequest(r *http.Request) (*model.Metric, error) {
 	body, err := io.ReadAll(r.Body)
-	defer r.Body.Close()
 	if err != nil {
 		return nil, fmt.Errorf("can't read body: %w", err)
 	}
+	defer r.Body.Close()
+
 	var req model.Metrics
 	if err := easyjson.Unmarshal(body, &req); err != nil {
 		return nil, fmt.Errorf("can't unmarshal request: %w", err)
@@ -241,10 +284,10 @@ func buildUpdateRequest(r *http.Request) (*model.Metric, error) {
 
 func buildGetRequest(r *http.Request) (*model.Metric, error) {
 	body, err := io.ReadAll(r.Body)
-	defer r.Body.Close()
 	if err != nil {
 		return nil, fmt.Errorf("can't read body: %w", err)
 	}
+	defer r.Body.Close()
 
 	var req model.Metrics
 	if err := easyjson.Unmarshal(body, &req); err != nil {

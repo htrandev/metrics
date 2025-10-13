@@ -75,42 +75,42 @@ func TestUpdateHandler(t *testing.T) {
 
 	testCases := []struct {
 		name         string
-		store        *mockStorage
+		storage      *mockStorage
 		method       string
 		url          string
 		expectedCode int
 	}{
 		{
 			name:         "valid counter",
-			store:        &mockStorage{},
+			storage:      &mockStorage{},
 			method:       http.MethodPost,
 			url:          "/update/counter/someMetric/527",
 			expectedCode: http.StatusOK,
 		},
 		{
 			name:         "valid gauge",
-			store:        &mockStorage{},
+			storage:      &mockStorage{},
 			method:       http.MethodPost,
 			url:          "/update/gauge/someMetric/527",
 			expectedCode: http.StatusOK,
 		},
 		{
 			name:         "invalid metric type",
-			store:        &mockStorage{},
+			storage:      &mockStorage{},
 			method:       http.MethodPost,
 			url:          "/update/test/someMetric/527",
 			expectedCode: http.StatusBadRequest,
 		},
 		{
 			name:         "set value error",
-			store:        &mockStorage{storeErr: true},
+			storage:      &mockStorage{storeErr: true},
 			method:       http.MethodPost,
 			url:          "/update/counter/someMetric/none",
 			expectedCode: http.StatusBadRequest,
 		},
 		{
 			name:         "store error",
-			store:        &mockStorage{storeErr: true},
+			storage:      &mockStorage{storeErr: true},
 			method:       http.MethodPost,
 			url:          "/update/counter/someMetric/527",
 			expectedCode: http.StatusBadRequest,
@@ -123,7 +123,12 @@ func TestUpdateHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(tc.method, tc.url, nil)
 
-			h := NewMetricsHandler(log, tc.store)
+			h := NewMetricsHandler(
+				log,
+				tc.storage,
+				nil, // todo
+				0,
+			)
 
 			mux := http.NewServeMux()
 			mux.HandleFunc("/update/{metricType}/{metricName}/{metricValue}", h.Update)
@@ -191,7 +196,12 @@ func TestGetHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(tc.method, tc.url, nil)
 
-			h := NewMetricsHandler(log, tc.storage)
+			h := NewMetricsHandler(
+				log,
+				tc.storage,
+				nil, // todo
+				0,
+			)
 
 			mux := http.NewServeMux()
 			mux.HandleFunc("/value/{metricType}/{metricName}", h.Get)
@@ -248,7 +258,12 @@ func TestGetAll(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			h := NewMetricsHandler(log, tc.storage)
+			h := NewMetricsHandler(
+				log,
+				tc.storage,
+				nil, // todo
+				0,
+			)
 			handler := http.HandlerFunc(h.GetAll)
 			srv := httptest.NewServer(handler)
 			defer srv.Close()
@@ -344,7 +359,12 @@ func TestUpdateViaBody(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			h := NewMetricsHandler(log, tc.storage)
+			h := NewMetricsHandler(
+				log,
+				tc.storage,
+				nil, // todo
+				0,
+			)
 			handler := http.HandlerFunc(h.UpdateJSON)
 			srv := httptest.NewServer(handler)
 			defer srv.Close()
@@ -450,7 +470,12 @@ func TestGetViaBody(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			h := NewMetricsHandler(log, tc.storage)
+			h := NewMetricsHandler(
+				log,
+				tc.storage,
+				nil, // todo
+				0,
+			)
 			handler := http.HandlerFunc(h.GetJSON)
 			srv := httptest.NewServer(handler)
 			defer srv.Close()

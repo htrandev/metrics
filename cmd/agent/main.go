@@ -61,7 +61,6 @@ func run() error {
 			}
 		}
 	}
-
 }
 
 func sendMetric(client *resty.Client, url string, metric model.Metric) error {

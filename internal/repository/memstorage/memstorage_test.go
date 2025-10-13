@@ -1,4 +1,4 @@
-package repository
+package memstorage
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 )
 
 func TestStore(t *testing.T) {
-	emptyMemstorage := NewMemStorageRepository()
+	emptyMemstorage := NewRepository()
 
 	testCases := []struct {
 		name          string
@@ -100,7 +100,7 @@ func TestStore(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	emptyMemstorage := NewMemStorageRepository()
+	emptyMemstorage := NewRepository()
 
 	testCases := []struct {
 		name           string
@@ -145,7 +145,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestGetAll(t *testing.T) {
-	emptyMemstorage := NewMemStorageRepository()
+	emptyMemstorage := NewRepository()
 
 	testCases := []struct {
 		name           string
@@ -193,7 +193,7 @@ func filledMemStorage(t *testing.T) *MemStorage {
 	t.Helper()
 	ctx := context.Background()
 
-	memstorage := NewMemStorageRepository()
+	memstorage := NewRepository()
 	if err := memstorage.Store(ctx, &model.Metric{
 		Name:  "gauge",
 		Value: model.MetricValue{Type: model.TypeGauge, Gauge: 0.1},

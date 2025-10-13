@@ -131,3 +131,166 @@ func (v *Metrics) UnmarshalJSON(data []byte) error {
 func (v *Metrics) UnmarshalEasyJSON(l *jlexer.Lexer) {
 	easyjson2220f231DecodeGithubComHtrandevMetricsInternalModel(l, v)
 }
+func easyjson2220f231DecodeGithubComHtrandevMetricsInternalModel1(in *jlexer.Lexer, out *MetricValue) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		switch key {
+		case "type":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Type = MetricType(in.Uint8())
+			}
+		case "gauge":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Gauge = float64(in.Float64())
+			}
+		case "counter":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Counter = int64(in.Int64())
+			}
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjson2220f231EncodeGithubComHtrandevMetricsInternalModel1(out *jwriter.Writer, in MetricValue) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"type\":"
+		out.RawString(prefix[1:])
+		out.Uint8(uint8(in.Type))
+	}
+	if in.Gauge != 0 {
+		const prefix string = ",\"gauge\":"
+		out.RawString(prefix)
+		out.Float64(float64(in.Gauge))
+	}
+	if in.Counter != 0 {
+		const prefix string = ",\"counter\":"
+		out.RawString(prefix)
+		out.Int64(int64(in.Counter))
+	}
+	out.RawByte('}')
+}
+
+// MarshalJSON supports json.Marshaler interface
+func (v MetricValue) MarshalJSON() ([]byte, error) {
+	w := jwriter.Writer{}
+	easyjson2220f231EncodeGithubComHtrandevMetricsInternalModel1(&w, v)
+	return w.Buffer.BuildBytes(), w.Error
+}
+
+// MarshalEasyJSON supports easyjson.Marshaler interface
+func (v MetricValue) MarshalEasyJSON(w *jwriter.Writer) {
+	easyjson2220f231EncodeGithubComHtrandevMetricsInternalModel1(w, v)
+}
+
+// UnmarshalJSON supports json.Unmarshaler interface
+func (v *MetricValue) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	easyjson2220f231DecodeGithubComHtrandevMetricsInternalModel1(&r, v)
+	return r.Error()
+}
+
+// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
+func (v *MetricValue) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	easyjson2220f231DecodeGithubComHtrandevMetricsInternalModel1(l, v)
+}
+func easyjson2220f231DecodeGithubComHtrandevMetricsInternalModel2(in *jlexer.Lexer, out *Metric) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		switch key {
+		case "name":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Name = string(in.String())
+			}
+		case "Value":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				(out.Value).UnmarshalEasyJSON(in)
+			}
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjson2220f231EncodeGithubComHtrandevMetricsInternalModel2(out *jwriter.Writer, in Metric) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"name\":"
+		out.RawString(prefix[1:])
+		out.String(string(in.Name))
+	}
+	{
+		const prefix string = ",\"Value\":"
+		out.RawString(prefix)
+		(in.Value).MarshalEasyJSON(out)
+	}
+	out.RawByte('}')
+}
+
+// MarshalJSON supports json.Marshaler interface
+func (v Metric) MarshalJSON() ([]byte, error) {
+	w := jwriter.Writer{}
+	easyjson2220f231EncodeGithubComHtrandevMetricsInternalModel2(&w, v)
+	return w.Buffer.BuildBytes(), w.Error
+}
+
+// MarshalEasyJSON supports easyjson.Marshaler interface
+func (v Metric) MarshalEasyJSON(w *jwriter.Writer) {
+	easyjson2220f231EncodeGithubComHtrandevMetricsInternalModel2(w, v)
+}
+
+// UnmarshalJSON supports json.Unmarshaler interface
+func (v *Metric) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	easyjson2220f231DecodeGithubComHtrandevMetricsInternalModel2(&r, v)
+	return r.Error()
+}
+
+// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
+func (v *Metric) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	easyjson2220f231DecodeGithubComHtrandevMetricsInternalModel2(l, v)
+}
