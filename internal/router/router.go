@@ -41,7 +41,7 @@ func New(logger *zap.Logger, handler *handler.MetricHandler) (*chi.Mux, error) {
 		middleware.Logger(logger),
 		middleware.ContentType(),
 		middleware.Compress(),
-	).Post("/value/", handler.GetJson)
+	).Post("/value/", handler.GetJSON)
 
 	return r, nil
 }

@@ -165,25 +165,25 @@ func (h *MetricHandler) UpdateJson(rw http.ResponseWriter, r *http.Request) {
 
 }
 
-func (h *MetricHandler) GetJson(rw http.ResponseWriter, r *http.Request) {
+func (h *MetricHandler) GetJSON(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	req, err := buildGetRequest(r)
 	if err != nil {
-		h.logger.Error("store error", zap.Error(err), zap.String("scope", "handler/GetJson"))
+		h.logger.Error("store error", zap.Error(err), zap.String("scope", "handler/GetJSON"))
 		rw.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	if req.Name == "" {
-		h.logger.Error("got empty metric name", zap.String("scope", "handler/GetJson"))
+		h.logger.Error("got empty metric name", zap.String("scope", "handler/GetJSON"))
 		rw.WriteHeader(http.StatusNotFound)
 		return
 	}
 
 	m, err := h.storage.Get(ctx, req.Name)
 	if err != nil {
-		h.logger.Error("get from storage", zap.Error(err), zap.String("scope", "handler/GetJson"))
+		h.logger.Error("get from storage", zap.Error(err), zap.String("scope", "handler/GetJSON"))
 		rw.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -192,7 +192,7 @@ func (h *MetricHandler) GetJson(rw http.ResponseWriter, r *http.Request) {
 
 	body, err := easyjson.Marshal(response)
 	if err != nil {
-		h.logger.Error("get from storage", zap.Error(err), zap.String("scope", "handler/GetJson"))
+		h.logger.Error("get from storage", zap.Error(err), zap.String("scope", "handler/GetJSON"))
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
