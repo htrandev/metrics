@@ -12,7 +12,7 @@ import (
 )
 
 type Storage interface {
-	Store(context.Context, *model.Metric) error
+	Set(context.Context, *model.Metric) error
 }
 
 type RestoreService struct {
@@ -48,9 +48,9 @@ func (r *RestoreService) Restore(ctx context.Context) error {
 			continue
 		}
 
-		r.logger.Debug("store metric", zap.Any("metric", m))
-		if err := r.storage.Store(ctx, &m); err != nil {
-			r.logger.Error("can't store metric", zap.Error(err), zap.Any("metric", m), zap.String("scope", "restore"))
+		r.logger.Debug("set metric", zap.Any("metric", m))
+		if err := r.storage.Set(ctx, &m); err != nil {
+			r.logger.Error("can't set metric", zap.Error(err), zap.Any("metric", m), zap.String("scope", "restore"))
 			continue
 		}
 	}

@@ -20,6 +20,23 @@ func NewRepository() *MemStorage {
 	}
 }
 
+// Set записывает значение метрики.
+// Если метрика уже существует, то ничего не делает.
+func (m *MemStorage) Set(Ctx context.Context, request *model.Metric) error {
+	if request == nil {
+		log.Println("repository: request is nil")
+		return nil
+	}
+
+	if _, ok := m.metrics[request.Name]; !ok {
+		m.metrics[request.Name] = *request
+	}
+
+	return nil
+}
+
+// Store записывает новое значение метрики.
+// Если метрика существует, то обновляет ее значение.
 func (m *MemStorage) Store(ctx context.Context, request *model.Metric) error {
 	if request == nil {
 		log.Println("repository: request is nil")
@@ -42,6 +59,7 @@ func (m *MemStorage) Store(ctx context.Context, request *model.Metric) error {
 	return nil
 }
 
+// Get возвращает метрику по имени.
 func (m *MemStorage) Get(ctx context.Context, name string) (model.Metric, error) {
 	metric, ok := m.metrics[name]
 	if !ok {
@@ -50,6 +68,7 @@ func (m *MemStorage) Get(ctx context.Context, name string) (model.Metric, error)
 	return metric, nil
 }
 
+// GetAll возвращает все метрики.
 func (m *MemStorage) GetAll(ctx context.Context) ([]model.Metric, error) {
 	metrics := make([]model.Metric, 0, len(m.metrics))
 	for _, metric := range m.metrics {

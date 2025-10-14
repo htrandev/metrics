@@ -189,6 +189,96 @@ func TestGetAll(t *testing.T) {
 	}
 }
 
+func TestSet(t *testing.T) {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name           string
+		storage        *MemStorage
+		req            *model.Metric
+		expetedMetrics []model.Metric
+	}{
+		{
+			name:    "valid empty gauge",
+			storage: NewRepository(),
+			req: &model.Metric{
+				Name:  "gauge",
+				Value: model.MetricValue{Type: model.TypeGauge, Gauge: 0.2},
+			},
+			expetedMetrics: []model.Metric{{
+				Name:  "gauge",
+				Value: model.MetricValue{Type: model.TypeGauge, Gauge: 0.2},
+			}},
+		},
+		{
+			name:    "valid empty counter",
+			storage: NewRepository(),
+			req: &model.Metric{
+				Name:  "counter",
+				Value: model.MetricValue{Type: model.TypeCounter, Counter: 2},
+			},
+			expetedMetrics: []model.Metric{{
+				Name:  "counter",
+				Value: model.MetricValue{Type: model.TypeCounter, Counter: 2},
+			}},
+		},
+		{
+			name:           "valid nil request",
+			storage:        NewRepository(),
+			req:            nil,
+			expetedMetrics: []model.Metric{},
+		},
+		{
+			name:    "valid filled gauge",
+			storage: filledMemStorage(t),
+			req: &model.Metric{
+				Name:  "gauge",
+				Value: model.MetricValue{Type: model.TypeGauge, Gauge: 0.2},
+			},
+			expetedMetrics: []model.Metric{
+				{
+					Name:  "counter",
+					Value: model.MetricValue{Type: model.TypeCounter, Counter: 1},
+				},
+				{
+					Name:  "gauge",
+					Value: model.MetricValue{Type: model.TypeGauge, Gauge: 0.1},
+				},
+			},
+		},
+		{
+			name:    "valid filled counter",
+			storage: filledMemStorage(t),
+			req: &model.Metric{
+				Name:  "counter",
+				Value: model.MetricValue{Type: model.TypeCounter, Counter: 2},
+			},
+			expetedMetrics: []model.Metric{
+				{
+					Name:  "counter",
+					Value: model.MetricValue{Type: model.TypeCounter, Counter: 1},
+				},
+				{
+					Name:  "gauge",
+					Value: model.MetricValue{Type: model.TypeGauge, Gauge: 0.1},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.storage.Set(ctx, tc.req)
+			require.NoError(t, err)
+
+			metrics, err := tc.storage.GetAll(ctx)
+			require.NoError(t, err)
+
+			require.Equal(t, tc.expetedMetrics, metrics)
+		})
+	}
+}
+
 func filledMemStorage(t *testing.T) *MemStorage {
 	t.Helper()
 	ctx := context.Background()
