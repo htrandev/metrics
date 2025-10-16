@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -12,7 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	models "github.com/htrandev/metrics/internal/model"
+	"github.com/htrandev/metrics/internal/model"
+	"github.com/htrandev/metrics/pkg/logger"
 )
 
 var (
@@ -21,7 +23,7 @@ var (
 	errGetAll = errors.New("getAll error")
 )
 
-type mockStorage struct {
+type mockService struct {
 	storeErr bool
 
 	getErr bool
@@ -31,33 +33,33 @@ type mockStorage struct {
 	filled bool
 }
 
-var _ MetricStorage = (*mockStorage)(nil)
+var _ Service = (*mockService)(nil)
 
-func (m *mockStorage) Store(context.Context, *models.Metric) error {
+func (m *mockService) Store(context.Context, *model.Metric) error {
 	if m.storeErr {
 		return errStore
 	}
 	return nil
 }
 
-func (m *mockStorage) Get(context.Context, string) (models.Metric, error) {
+func (m *mockService) Get(context.Context, string) (model.Metric, error) {
 	if m.getErr {
-		return models.Metric{}, errGet
+		return model.Metric{}, errGet
 	}
-	metric := models.Metric{Name: "test"}
+	metric := model.Metric{Name: "test"}
 	if m.gauge {
-		metric.Value.Type = models.TypeGauge
+		metric.Value.Type = model.TypeGauge
 		metric.Value.Gauge = 0.1
 		return metric, nil
 	}
 
-	metric.Value.Type = models.TypeCounter
+	metric.Value.Type = model.TypeCounter
 	metric.Value.Counter = 1
 
 	return metric, nil
 }
 
-func (m *mockStorage) GetAll(context.Context) ([]models.Metric, error) {
+func (m *mockService) GetAll(context.Context) ([]model.Metric, error) {
 	if m.getAll {
 		return nil, errGetAll
 	}
@@ -68,44 +70,47 @@ func (m *mockStorage) GetAll(context.Context) ([]models.Metric, error) {
 }
 
 func TestUpdateHandler(t *testing.T) {
+	log, err := logger.NewZapLogger("debug")
+	require.NoError(t, err)
+
 	testCases := []struct {
 		name         string
-		store        *mockStorage
+		service      *mockService
 		method       string
 		url          string
 		expectedCode int
 	}{
 		{
 			name:         "valid counter",
-			store:        &mockStorage{},
+			service:      &mockService{},
 			method:       http.MethodPost,
 			url:          "/update/counter/someMetric/527",
 			expectedCode: http.StatusOK,
 		},
 		{
 			name:         "valid gauge",
-			store:        &mockStorage{},
+			service:      &mockService{},
 			method:       http.MethodPost,
 			url:          "/update/gauge/someMetric/527",
 			expectedCode: http.StatusOK,
 		},
 		{
 			name:         "invalid metric type",
-			store:        &mockStorage{},
+			service:      &mockService{},
 			method:       http.MethodPost,
 			url:          "/update/test/someMetric/527",
 			expectedCode: http.StatusBadRequest,
 		},
 		{
 			name:         "set value error",
-			store:        &mockStorage{storeErr: true},
+			service:      &mockService{storeErr: true},
 			method:       http.MethodPost,
 			url:          "/update/counter/someMetric/none",
 			expectedCode: http.StatusBadRequest,
 		},
 		{
 			name:         "store error",
-			store:        &mockStorage{storeErr: true},
+			service:      &mockService{storeErr: true},
 			method:       http.MethodPost,
 			url:          "/update/counter/someMetric/527",
 			expectedCode: http.StatusBadRequest,
@@ -118,7 +123,12 @@ func TestUpdateHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(tc.method, tc.url, nil)
 
-			h := NewMetricsHandler(tc.store)
+			h := NewMetricsHandler(
+				log,
+				tc.service,
+				nil,
+				0,
+			)
 
 			mux := http.NewServeMux()
 			mux.HandleFunc("/update/{metricType}/{metricName}/{metricValue}", h.Update)
@@ -133,9 +143,12 @@ func TestUpdateHandler(t *testing.T) {
 }
 
 func TestGetHandler(t *testing.T) {
+	log, err := logger.NewZapLogger("debug")
+	require.NoError(t, err)
+
 	testCases := []struct {
 		name             string
-		storage          *mockStorage
+		service          *mockService
 		method           string
 		url              string
 		wantErr          bool
@@ -144,7 +157,7 @@ func TestGetHandler(t *testing.T) {
 	}{
 		{
 			name:             "valid gauge",
-			storage:          &mockStorage{gauge: true},
+			service:          &mockService{gauge: true},
 			method:           http.MethodGet,
 			url:              "/value/gauge/test",
 			wantErr:          false,
@@ -153,7 +166,7 @@ func TestGetHandler(t *testing.T) {
 		},
 		{
 			name:             "valid counter",
-			storage:          &mockStorage{gauge: false},
+			service:          &mockService{gauge: false},
 			method:           http.MethodGet,
 			url:              "/value/counter/test",
 			wantErr:          false,
@@ -162,7 +175,7 @@ func TestGetHandler(t *testing.T) {
 		},
 		{
 			name:         "unknown metric type",
-			storage:      &mockStorage{},
+			service:      &mockService{},
 			method:       http.MethodGet,
 			url:          "/value/test/test",
 			wantErr:      true,
@@ -170,7 +183,7 @@ func TestGetHandler(t *testing.T) {
 		},
 		{
 			name:         "get error",
-			storage:      &mockStorage{getErr: true},
+			service:      &mockService{getErr: true},
 			method:       http.MethodGet,
 			url:          "/value/counter/test",
 			wantErr:      true,
@@ -183,7 +196,12 @@ func TestGetHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(tc.method, tc.url, nil)
 
-			h := NewMetricsHandler(tc.storage)
+			h := NewMetricsHandler(
+				log,
+				tc.service,
+				nil,
+				0,
+			)
 
 			mux := http.NewServeMux()
 			mux.HandleFunc("/value/{metricType}/{metricName}", h.Get)
@@ -202,9 +220,12 @@ func TestGetHandler(t *testing.T) {
 }
 
 func TestGetAll(t *testing.T) {
+	log, err := logger.NewZapLogger("debug")
+	require.NoError(t, err)
+
 	testCases := []struct {
 		name             string
-		storage          *mockStorage
+		service          *mockService
 		method           string
 		wantErr          bool
 		expectedCode     int
@@ -212,7 +233,7 @@ func TestGetAll(t *testing.T) {
 	}{
 		{
 			name:             "valid empty storage",
-			storage:          &mockStorage{},
+			service:          &mockService{},
 			method:           http.MethodGet,
 			wantErr:          false,
 			expectedCode:     http.StatusOK,
@@ -220,7 +241,7 @@ func TestGetAll(t *testing.T) {
 		},
 		{
 			name:             "valid filled storage",
-			storage:          &mockStorage{filled: true},
+			service:          &mockService{filled: true},
 			method:           http.MethodGet,
 			wantErr:          false,
 			expectedCode:     http.StatusOK,
@@ -228,7 +249,7 @@ func TestGetAll(t *testing.T) {
 		},
 		{
 			name:         "get all error",
-			storage:      &mockStorage{getAll: true},
+			service:      &mockService{getAll: true},
 			method:       http.MethodGet,
 			wantErr:      true,
 			expectedCode: http.StatusInternalServerError,
@@ -237,29 +258,15 @@ func TestGetAll(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			{
-				// w := httptest.NewRecorder()
-				// r := httptest.NewRequest(tc.method, tc.url, nil)
-
-				// h := NewMetricsHandler(tc.storage)
-
-				// mux := http.NewServeMux()
-				// mux.HandleFunc("/", h.GetAll)
-				// mux.ServeHTTP(w, r)
-
-				// res := w.Result()
-				// defer res.Body.Close()
-
-				// body, err := io.ReadAll(res.Body)
-				// require.NoError(t, err)
-
-				// require.EqualValues(t, tc.expectedCode, res.StatusCode)
-				// require.EqualValues(t, tc.expectedResponse, string(body))
-			}
-
-			h := NewMetricsHandler(tc.storage)
+			h := NewMetricsHandler(
+				log,
+				tc.service,
+				nil,
+				0,
+			)
 			handler := http.HandlerFunc(h.GetAll)
 			srv := httptest.NewServer(handler)
+			defer srv.Close()
 
 			req := resty.New().R()
 			req.Method = tc.method
@@ -274,19 +281,232 @@ func TestGetAll(t *testing.T) {
 	}
 }
 
-func filledStorage() []models.Metric {
-	metrics := []models.Metric{
+func TestUpdateViaBody(t *testing.T) {
+	log, err := logger.NewZapLogger("debug")
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name         string
+		service      *mockService
+		method       string
+		expectedCode int
+		body         io.Reader
+	}{
+		{
+			name:         "valid counter",
+			service:      &mockService{},
+			method:       http.MethodPost,
+			expectedCode: http.StatusOK,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"counter","type":"counter","delta":1}`))
+			}(),
+		},
+		{
+			name:         "valid gauge",
+			service:      &mockService{},
+			method:       http.MethodPost,
+			expectedCode: http.StatusOK,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"gauge","type":"gauge","value":0.1}`))
+			}(),
+		},
+		{
+			name:         "empty counter",
+			service:      &mockService{},
+			method:       http.MethodPost,
+			expectedCode: http.StatusBadRequest,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"counter","type":"counter"}`))
+			}(),
+		},
+		{
+			name:         "empty gauge",
+			service:      &mockService{},
+			method:       http.MethodPost,
+			expectedCode: http.StatusBadRequest,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"gauge","type":"gauge"}`))
+			}(),
+		},
+		{
+			name:         "build request error",
+			service:      &mockService{},
+			method:       http.MethodPost,
+			expectedCode: http.StatusBadRequest,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id:"gauge","type":"gauge","value":0.1}`))
+			}(),
+		},
+		{
+			name:         "empty name",
+			service:      &mockService{},
+			method:       http.MethodPost,
+			expectedCode: http.StatusNotFound,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"","type":"gauge","value":0.1}`))
+			}(),
+		},
+		{
+			name:         "store error",
+			service:      &mockService{storeErr: true},
+			method:       http.MethodPost,
+			expectedCode: http.StatusInternalServerError,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"gauge","type":"gauge","value":0.1}`))
+			}(),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := NewMetricsHandler(
+				log,
+				tc.service,
+				nil,
+				0,
+			)
+			handler := http.HandlerFunc(h.UpdateJSON)
+			srv := httptest.NewServer(handler)
+			defer srv.Close()
+
+			req := resty.New().R()
+			req.Method = http.MethodPost
+			req.URL = srv.URL
+			req.Body = tc.body
+
+			resp, err := req.Send()
+			assert.NoError(t, err, "error making HTTP request")
+
+			require.EqualValues(t, tc.expectedCode, resp.StatusCode())
+		})
+	}
+}
+
+func TestGetViaBody(t *testing.T) {
+	log, err := logger.NewZapLogger("debug")
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name         string
+		service      *mockService
+		method       string
+		expectedCode int
+		body         io.Reader
+		expectedBody string
+	}{
+		{
+			name:         "valid gauge",
+			service:      &mockService{gauge: true},
+			method:       http.MethodPost,
+			expectedCode: http.StatusOK,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"test","type":"gauge"}`))
+			}(),
+			expectedBody: func() string {
+				return `{"id":"test","type":"gauge","value":0.1}`
+			}(),
+		},
+		{
+			name:         "valid counter",
+			service:      &mockService{gauge: false},
+			method:       http.MethodPost,
+			expectedCode: http.StatusOK,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"test","type":"counter"}`))
+			}(),
+			expectedBody: func() string {
+				return `{"id":"test","type":"counter","delta":1}`
+			}(),
+		},
+		{
+			name:         "unknown type",
+			service:      &mockService{gauge: false},
+			method:       http.MethodPost,
+			expectedCode: http.StatusBadRequest,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"test","type":"test"}`))
+			}(),
+			expectedBody: func() string {
+				return ``
+			}(),
+		},
+		{
+			name:         "error build request",
+			service:      &mockService{gauge: false},
+			method:       http.MethodPost,
+			expectedCode: http.StatusBadRequest,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id:"counter","type":"counter"}`))
+			}(),
+			expectedBody: func() string {
+				return ``
+			}(),
+		},
+		{
+			name:         "empty name",
+			service:      &mockService{gauge: false},
+			method:       http.MethodPost,
+			expectedCode: http.StatusNotFound,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"","type":"counter"}`))
+			}(),
+			expectedBody: func() string {
+				return ``
+			}(),
+		},
+		{
+			name:         "get error",
+			service:      &mockService{getErr: true},
+			method:       http.MethodPost,
+			expectedCode: http.StatusNotFound,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"test","type":"counter"}`))
+			}(),
+			expectedBody: func() string {
+				return ``
+			}(),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := NewMetricsHandler(
+				log,
+				tc.service,
+				nil,
+				0,
+			)
+			handler := http.HandlerFunc(h.GetJSON)
+			srv := httptest.NewServer(handler)
+			defer srv.Close()
+
+			req := resty.New().R()
+			req.Method = http.MethodPost
+			req.URL = srv.URL
+			req.Body = tc.body
+
+			resp, err := req.Send()
+			assert.NoError(t, err, "error making HTTP request")
+
+			require.EqualValues(t, tc.expectedCode, resp.StatusCode())
+			require.EqualValues(t, tc.expectedBody, string(resp.Body()))
+		})
+	}
+}
+
+func filledStorage() []model.Metric {
+	metrics := []model.Metric{
 		{
 			Name: "gauge",
-			Value: models.MetricValue{
-				Type:  models.TypeGauge,
+			Value: model.MetricValue{
+				Type:  model.TypeGauge,
 				Gauge: 0.1,
 			},
 		},
 		{
 			Name: "counter",
-			Value: models.MetricValue{
-				Type:    models.TypeCounter,
+			Value: model.MetricValue{
+				Type:    model.TypeCounter,
 				Counter: 1,
 			},
 		},

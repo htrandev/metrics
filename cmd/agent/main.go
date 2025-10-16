@@ -1,90 +1,79 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
-	"net/url"
 	"os"
-	"strconv"
+	"os/signal"
+	"syscall"
 	"time"
 
-	"github.com/go-resty/resty/v2"
-	models "github.com/htrandev/metrics/internal/model"
+	"go.uber.org/zap"
+
+	"github.com/htrandev/metrics/internal/agent"
+	"github.com/htrandev/metrics/internal/model"
+	"github.com/htrandev/metrics/pkg/logger"
 )
 
 func main() {
 	if err := run(); err != nil {
-		log.Printf("run ends with error: %s", err.Error())
+		log.Printf("run agent ends with error: %s", err.Error())
 		os.Exit(1)
 	}
 }
 
 func run() error {
 	log.Println("init config")
-	conf := parseFlags()
+	conf, err := parseFlags()
+	if err != nil {
+		return fmt.Errorf("parse flags: %w", err)
+	}
 
-	log.Println("init tickers")
+	log.Println("init logger")
+	zl, err := logger.NewZapLogger(conf.logLvl)
+	if err != nil {
+		return fmt.Errorf("init logger: %w", err)
+	}
+
+	zl.Info("init tickers")
 	poolTicker := time.NewTicker(conf.pollInterval)
 	defer poolTicker.Stop()
 
 	reportTicker := time.NewTicker(conf.reportInterval)
 	defer reportTicker.Stop()
 
-	client := resty.New()
-	collection := models.NewCollection()
+	zl.Info("init resty client")
+
+	zl.Info("init agent")
+	agent := agent.New(conf.addr)
+
+	zl.Info("init collection")
+	collection := model.NewCollection()
+
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer cancel()
 
 	for {
 		var send bool
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-poolTicker.C:
 		case <-reportTicker.C:
 			send = true
 		}
-		log.Println("collect metrics")
+		zl.Info("collect metrics")
+
 		metrics := collection.Collect()
 
 		if send {
+			zl.Info("send metrics")
 			for _, metric := range metrics {
-				if err := sendMetric(client, conf.addr, metric); err != nil {
-					return fmt.Errorf("send metric: %w", err)
+				if err := agent.SendMetric(ctx, metric); err != nil {
+					zl.Error("can't send metric", zap.Any("metric", metric), zap.Error(err))
 				}
 			}
 		}
 	}
-
-}
-
-func sendMetric(client *resty.Client, addr string, metric models.Metric) error {
-	url, err := buildURL(addr, metric)
-	if err != nil {
-		return fmt.Errorf("build url for [%+v]", metric)
-	}
-
-	_, err = client.R().Post(url)
-	if err != nil {
-		return fmt.Errorf("post: %w", err)
-	}
-	return nil
-}
-
-func buildURL(addr string, m models.Metric) (string, error) {
-	u := url.URL{
-		Scheme: "http",
-		Host:   addr,
-	}
-	var err error
-
-	switch m.Value.Type {
-	case models.TypeGauge:
-		u.Path, err = url.JoinPath("update", m.Value.Type.String(), m.Name, strconv.FormatFloat(m.Value.Gauge, 'f', -1, 64))
-	case models.TypeCounter:
-		u.Path, err = url.JoinPath("update", m.Value.Type.String(), m.Name, strconv.FormatInt(m.Value.Counter, 10))
-	}
-
-	if err != nil {
-		return "", fmt.Errorf("join path: %w", err)
-	}
-
-	log.Printf("send metric: [%+v] type: %s", m, m.Value.Type)
-	return u.String(), nil
 }
