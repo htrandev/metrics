@@ -350,7 +350,7 @@ func TestUpdateViaBody(t *testing.T) {
 			name:         "store error",
 			service:      &mockService{storeErr: true},
 			method:       http.MethodPost,
-			expectedCode: http.StatusBadRequest,
+			expectedCode: http.StatusInternalServerError,
 			body: func() io.Reader {
 				return bytes.NewBuffer([]byte(`{"id":"gauge","type":"gauge","value":0.1}`))
 			}(),
