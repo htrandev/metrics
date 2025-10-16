@@ -23,7 +23,7 @@ var (
 	errGetAll = errors.New("getAll error")
 )
 
-type mockStorage struct {
+type mockService struct {
 	storeErr bool
 
 	getErr bool
@@ -33,16 +33,16 @@ type mockStorage struct {
 	filled bool
 }
 
-var _ MetricStorage = (*mockStorage)(nil)
+var _ Service = (*mockService)(nil)
 
-func (m *mockStorage) Store(context.Context, *model.Metric) error {
+func (m *mockService) Store(context.Context, *model.Metric) error {
 	if m.storeErr {
 		return errStore
 	}
 	return nil
 }
 
-func (m *mockStorage) Get(context.Context, string) (model.Metric, error) {
+func (m *mockService) Get(context.Context, string) (model.Metric, error) {
 	if m.getErr {
 		return model.Metric{}, errGet
 	}
@@ -59,7 +59,7 @@ func (m *mockStorage) Get(context.Context, string) (model.Metric, error) {
 	return metric, nil
 }
 
-func (m *mockStorage) GetAll(context.Context) ([]model.Metric, error) {
+func (m *mockService) GetAll(context.Context) ([]model.Metric, error) {
 	if m.getAll {
 		return nil, errGetAll
 	}
@@ -75,42 +75,42 @@ func TestUpdateHandler(t *testing.T) {
 
 	testCases := []struct {
 		name         string
-		storage      *mockStorage
+		service      *mockService
 		method       string
 		url          string
 		expectedCode int
 	}{
 		{
 			name:         "valid counter",
-			storage:      &mockStorage{},
+			service:      &mockService{},
 			method:       http.MethodPost,
 			url:          "/update/counter/someMetric/527",
 			expectedCode: http.StatusOK,
 		},
 		{
 			name:         "valid gauge",
-			storage:      &mockStorage{},
+			service:      &mockService{},
 			method:       http.MethodPost,
 			url:          "/update/gauge/someMetric/527",
 			expectedCode: http.StatusOK,
 		},
 		{
 			name:         "invalid metric type",
-			storage:      &mockStorage{},
+			service:      &mockService{},
 			method:       http.MethodPost,
 			url:          "/update/test/someMetric/527",
 			expectedCode: http.StatusBadRequest,
 		},
 		{
 			name:         "set value error",
-			storage:      &mockStorage{storeErr: true},
+			service:      &mockService{storeErr: true},
 			method:       http.MethodPost,
 			url:          "/update/counter/someMetric/none",
 			expectedCode: http.StatusBadRequest,
 		},
 		{
 			name:         "store error",
-			storage:      &mockStorage{storeErr: true},
+			service:      &mockService{storeErr: true},
 			method:       http.MethodPost,
 			url:          "/update/counter/someMetric/527",
 			expectedCode: http.StatusBadRequest,
@@ -125,8 +125,8 @@ func TestUpdateHandler(t *testing.T) {
 
 			h := NewMetricsHandler(
 				log,
-				tc.storage,
-				nil, // todo
+				tc.service,
+				nil,
 				0,
 			)
 
@@ -148,7 +148,7 @@ func TestGetHandler(t *testing.T) {
 
 	testCases := []struct {
 		name             string
-		storage          *mockStorage
+		service          *mockService
 		method           string
 		url              string
 		wantErr          bool
@@ -157,7 +157,7 @@ func TestGetHandler(t *testing.T) {
 	}{
 		{
 			name:             "valid gauge",
-			storage:          &mockStorage{gauge: true},
+			service:          &mockService{gauge: true},
 			method:           http.MethodGet,
 			url:              "/value/gauge/test",
 			wantErr:          false,
@@ -166,7 +166,7 @@ func TestGetHandler(t *testing.T) {
 		},
 		{
 			name:             "valid counter",
-			storage:          &mockStorage{gauge: false},
+			service:          &mockService{gauge: false},
 			method:           http.MethodGet,
 			url:              "/value/counter/test",
 			wantErr:          false,
@@ -175,7 +175,7 @@ func TestGetHandler(t *testing.T) {
 		},
 		{
 			name:         "unknown metric type",
-			storage:      &mockStorage{},
+			service:      &mockService{},
 			method:       http.MethodGet,
 			url:          "/value/test/test",
 			wantErr:      true,
@@ -183,7 +183,7 @@ func TestGetHandler(t *testing.T) {
 		},
 		{
 			name:         "get error",
-			storage:      &mockStorage{getErr: true},
+			service:      &mockService{getErr: true},
 			method:       http.MethodGet,
 			url:          "/value/counter/test",
 			wantErr:      true,
@@ -198,8 +198,8 @@ func TestGetHandler(t *testing.T) {
 
 			h := NewMetricsHandler(
 				log,
-				tc.storage,
-				nil, // todo
+				tc.service,
+				nil,
 				0,
 			)
 
@@ -225,7 +225,7 @@ func TestGetAll(t *testing.T) {
 
 	testCases := []struct {
 		name             string
-		storage          *mockStorage
+		service          *mockService
 		method           string
 		wantErr          bool
 		expectedCode     int
@@ -233,7 +233,7 @@ func TestGetAll(t *testing.T) {
 	}{
 		{
 			name:             "valid empty storage",
-			storage:          &mockStorage{},
+			service:          &mockService{},
 			method:           http.MethodGet,
 			wantErr:          false,
 			expectedCode:     http.StatusOK,
@@ -241,7 +241,7 @@ func TestGetAll(t *testing.T) {
 		},
 		{
 			name:             "valid filled storage",
-			storage:          &mockStorage{filled: true},
+			service:          &mockService{filled: true},
 			method:           http.MethodGet,
 			wantErr:          false,
 			expectedCode:     http.StatusOK,
@@ -249,7 +249,7 @@ func TestGetAll(t *testing.T) {
 		},
 		{
 			name:         "get all error",
-			storage:      &mockStorage{getAll: true},
+			service:      &mockService{getAll: true},
 			method:       http.MethodGet,
 			wantErr:      true,
 			expectedCode: http.StatusInternalServerError,
@@ -260,8 +260,8 @@ func TestGetAll(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
-				tc.storage,
-				nil, // todo
+				tc.service,
+				nil,
 				0,
 			)
 			handler := http.HandlerFunc(h.GetAll)
@@ -287,14 +287,14 @@ func TestUpdateViaBody(t *testing.T) {
 
 	testCases := []struct {
 		name         string
-		storage      *mockStorage
+		service      *mockService
 		method       string
 		expectedCode int
 		body         io.Reader
 	}{
 		{
 			name:         "valid counter",
-			storage:      &mockStorage{},
+			service:      &mockService{},
 			method:       http.MethodPost,
 			expectedCode: http.StatusOK,
 			body: func() io.Reader {
@@ -303,7 +303,7 @@ func TestUpdateViaBody(t *testing.T) {
 		},
 		{
 			name:         "valid gauge",
-			storage:      &mockStorage{},
+			service:      &mockService{},
 			method:       http.MethodPost,
 			expectedCode: http.StatusOK,
 			body: func() io.Reader {
@@ -312,7 +312,7 @@ func TestUpdateViaBody(t *testing.T) {
 		},
 		{
 			name:         "empty counter",
-			storage:      &mockStorage{},
+			service:      &mockService{},
 			method:       http.MethodPost,
 			expectedCode: http.StatusBadRequest,
 			body: func() io.Reader {
@@ -321,7 +321,7 @@ func TestUpdateViaBody(t *testing.T) {
 		},
 		{
 			name:         "empty gauge",
-			storage:      &mockStorage{},
+			service:      &mockService{},
 			method:       http.MethodPost,
 			expectedCode: http.StatusBadRequest,
 			body: func() io.Reader {
@@ -330,7 +330,7 @@ func TestUpdateViaBody(t *testing.T) {
 		},
 		{
 			name:         "build request error",
-			storage:      &mockStorage{},
+			service:      &mockService{},
 			method:       http.MethodPost,
 			expectedCode: http.StatusBadRequest,
 			body: func() io.Reader {
@@ -339,7 +339,7 @@ func TestUpdateViaBody(t *testing.T) {
 		},
 		{
 			name:         "empty name",
-			storage:      &mockStorage{},
+			service:      &mockService{},
 			method:       http.MethodPost,
 			expectedCode: http.StatusNotFound,
 			body: func() io.Reader {
@@ -348,7 +348,7 @@ func TestUpdateViaBody(t *testing.T) {
 		},
 		{
 			name:         "store error",
-			storage:      &mockStorage{storeErr: true},
+			service:      &mockService{storeErr: true},
 			method:       http.MethodPost,
 			expectedCode: http.StatusBadRequest,
 			body: func() io.Reader {
@@ -361,8 +361,8 @@ func TestUpdateViaBody(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
-				tc.storage,
-				nil, // todo
+				tc.service,
+				nil,
 				0,
 			)
 			handler := http.HandlerFunc(h.UpdateJSON)
@@ -388,7 +388,7 @@ func TestGetViaBody(t *testing.T) {
 
 	testCases := []struct {
 		name         string
-		storage      *mockStorage
+		service      *mockService
 		method       string
 		expectedCode int
 		body         io.Reader
@@ -396,7 +396,7 @@ func TestGetViaBody(t *testing.T) {
 	}{
 		{
 			name:         "valid gauge",
-			storage:      &mockStorage{gauge: true},
+			service:      &mockService{gauge: true},
 			method:       http.MethodPost,
 			expectedCode: http.StatusOK,
 			body: func() io.Reader {
@@ -408,7 +408,7 @@ func TestGetViaBody(t *testing.T) {
 		},
 		{
 			name:         "valid counter",
-			storage:      &mockStorage{gauge: false},
+			service:      &mockService{gauge: false},
 			method:       http.MethodPost,
 			expectedCode: http.StatusOK,
 			body: func() io.Reader {
@@ -420,7 +420,7 @@ func TestGetViaBody(t *testing.T) {
 		},
 		{
 			name:         "unknown type",
-			storage:      &mockStorage{gauge: false},
+			service:      &mockService{gauge: false},
 			method:       http.MethodPost,
 			expectedCode: http.StatusBadRequest,
 			body: func() io.Reader {
@@ -432,7 +432,7 @@ func TestGetViaBody(t *testing.T) {
 		},
 		{
 			name:         "error build request",
-			storage:      &mockStorage{gauge: false},
+			service:      &mockService{gauge: false},
 			method:       http.MethodPost,
 			expectedCode: http.StatusBadRequest,
 			body: func() io.Reader {
@@ -444,7 +444,7 @@ func TestGetViaBody(t *testing.T) {
 		},
 		{
 			name:         "empty name",
-			storage:      &mockStorage{gauge: false},
+			service:      &mockService{gauge: false},
 			method:       http.MethodPost,
 			expectedCode: http.StatusNotFound,
 			body: func() io.Reader {
@@ -456,7 +456,7 @@ func TestGetViaBody(t *testing.T) {
 		},
 		{
 			name:         "get error",
-			storage:      &mockStorage{getErr: true},
+			service:      &mockService{getErr: true},
 			method:       http.MethodPost,
 			expectedCode: http.StatusNotFound,
 			body: func() io.Reader {
@@ -472,8 +472,8 @@ func TestGetViaBody(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
-				tc.storage,
-				nil, // todo
+				tc.service,
+				nil,
 				0,
 			)
 			handler := http.HandlerFunc(h.GetJSON)

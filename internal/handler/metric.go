@@ -16,10 +16,10 @@ import (
 
 const defaultInterval = 300 * time.Second
 
-type MetricStorage interface {
-	Get(context.Context, string) (model.Metric, error)
-	GetAll(context.Context) ([]model.Metric, error)
-	Store(context.Context, *model.Metric) error
+type Service interface {
+	Get(ctx context.Context, name string) (model.Metric, error)
+	GetAll(ctx context.Context) ([]model.Metric, error)
+	Store(ctx context.Context, metric *model.Metric) error
 }
 
 type FileStorage interface {
@@ -29,14 +29,14 @@ type FileStorage interface {
 type MetricHandler struct {
 	storeInterval time.Duration
 
-	storage MetricStorage
+	service Service
 	flusher FileStorage
 	logger  *zap.Logger
 }
 
 func NewMetricsHandler(
 	l *zap.Logger,
-	s MetricStorage,
+	s Service,
 	flusher FileStorage,
 	interval time.Duration,
 ) *MetricHandler {
@@ -45,7 +45,7 @@ func NewMetricsHandler(
 	}
 	return &MetricHandler{
 		logger:        l,
-		storage:       s,
+		service:       s,
 		flusher:       flusher,
 		storeInterval: interval,
 	}
@@ -60,7 +60,7 @@ func (h *MetricHandler) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			metrics, err := h.storage.GetAll(ctx)
+			metrics, err := h.service.GetAll(ctx)
 			if err != nil {
 				h.logger.Error("get all metrics to flush", zap.Error(err), zap.String("scope", "Run"))
 				continue
@@ -86,7 +86,7 @@ func (h *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	metric, err := h.storage.Get(ctx, metricName)
+	metric, err := h.service.Get(ctx, metricName)
 	if err != nil {
 		h.logger.Error("get from storage", zap.Error(err), zap.String("scope", "handler/Get"))
 		rw.WriteHeader(http.StatusNotFound)
@@ -101,7 +101,7 @@ func (h *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
 func (h *MetricHandler) GetAll(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	metrics, err := h.storage.GetAll(ctx)
+	metrics, err := h.service.GetAll(ctx)
 	if err != nil {
 		h.logger.Error("get all metrics", zap.Error(err), zap.String("scope", "handler/GetAll"))
 		rw.WriteHeader(http.StatusInternalServerError)
@@ -158,7 +158,7 @@ func (h *MetricHandler) Update(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.storage.Store(ctx, metric); err != nil {
+	if err := h.service.Store(ctx, metric); err != nil {
 		h.logger.Error("store error", zap.Error(err), zap.String("scope", "handler/Update"))
 		rw.WriteHeader(http.StatusBadRequest)
 		return
@@ -174,20 +174,25 @@ func (h *MetricHandler) UpdateJSON(rw http.ResponseWriter, r *http.Request) {
 
 	m, err := buildUpdateRequest(r)
 	if err != nil {
-		h.logger.Error("store error", zap.Error(err), zap.String("scope", "handler/UpdateJSON"))
+		h.logger.Error("build request error", zap.Error(err), zap.String("scope", "handler/UpdateJSON"))
 		rw.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
+	if m == nil {
+		h.logger.Error("request is nil", zap.String("scope", "handler/UpdateJSON"))
+		rw.WriteHeader(http.StatusBadRequest)
+		return
+	}
 	if m.Name == "" {
 		h.logger.Error("got empty metric name", zap.String("scope", "handler/UpdateJSON"))
 		rw.WriteHeader(http.StatusNotFound)
 		return
 	}
 
-	if err := h.storage.Store(ctx, m); err != nil {
+	if err := h.service.Store(ctx, m); err != nil {
 		h.logger.Error("store error", zap.Error(err), zap.String("scope", "handler/UpdateJSON"))
-		rw.WriteHeader(http.StatusBadRequest)
+		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	h.logger.Info("successfully stored")
@@ -223,7 +228,7 @@ func (h *MetricHandler) GetJSON(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m, err := h.storage.Get(ctx, req.Name)
+	m, err := h.service.Get(ctx, req.Name)
 	if err != nil {
 		h.logger.Error("get from storage", zap.Error(err), zap.String("scope", "handler/GetJSON"))
 		rw.WriteHeader(http.StatusNotFound)
@@ -261,14 +266,14 @@ func buildUpdateRequest(r *http.Request) (*model.Metric, error) {
 	}
 
 	switch req.MType {
-	case "gauge":
+	case model.TypeGauge.String():
 		m.Value.Type = model.TypeGauge
 		if req.Value != nil {
 			m.Value.Gauge = *req.Value
 		} else {
 			return nil, fmt.Errorf("value for metric is nil")
 		}
-	case "counter":
+	case model.TypeCounter.String():
 		m.Value.Type = model.TypeCounter
 		if req.Delta != nil {
 			m.Value.Counter = *req.Delta
@@ -299,9 +304,9 @@ func buildGetRequest(r *http.Request) (*model.Metric, error) {
 	}
 
 	switch req.MType {
-	case "gauge":
+	case model.TypeGauge.String():
 		m.Value.Type = model.TypeGauge
-	case "counter":
+	case model.TypeCounter.String():
 		m.Value.Type = model.TypeCounter
 	default:
 		return nil, fmt.Errorf("unknown metric type: %s", req.MType)

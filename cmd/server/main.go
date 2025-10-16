@@ -14,6 +14,7 @@ import (
 	"github.com/htrandev/metrics/internal/repository/file"
 	"github.com/htrandev/metrics/internal/repository/memstorage"
 	"github.com/htrandev/metrics/internal/router"
+	"github.com/htrandev/metrics/internal/service/metrics"
 	"github.com/htrandev/metrics/internal/service/restore"
 	"github.com/htrandev/metrics/pkg/logger"
 )
@@ -26,11 +27,13 @@ func main() {
 }
 
 func run() error {
+	log.Println("init config")
 	flags, err := parseFlags()
 	if err != nil {
 		return fmt.Errorf("parse flags: %w", err)
 	}
 
+	log.Println("init logger")
 	zl, err := logger.NewZapLogger(flags.logLvl)
 	if err != nil {
 		return fmt.Errorf("init logger: %w", err)
@@ -49,10 +52,13 @@ func run() error {
 	}
 	defer func() { _ = fileRepository.Close() }()
 
+	zl.Info("init metric service")
+	metricService := metrics.NewService(memStorageRepository)
+
 	zl.Info("init handler")
 	metricHandler := handler.NewMetricsHandler(
 		zl,
-		memStorageRepository,
+		metricService,
 		fileRepository,
 		flags.storeInterval,
 	)

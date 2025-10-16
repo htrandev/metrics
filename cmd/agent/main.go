@@ -1,25 +1,24 @@
 package main
 
 import (
-	"bytes"
-	"compress/gzip"
-	"errors"
+	"context"
 	"fmt"
-	"io"
 	"log"
-	"net/url"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
-	"github.com/go-resty/resty/v2"
-	"github.com/mailru/easyjson"
+	"go.uber.org/zap"
 
+	"github.com/htrandev/metrics/internal/agent"
 	"github.com/htrandev/metrics/internal/model"
+	"github.com/htrandev/metrics/pkg/logger"
 )
 
 func main() {
 	if err := run(); err != nil {
-		log.Printf("run ends with error: %s", err.Error())
+		log.Printf("run agent ends with error: %s", err.Error())
 		os.Exit(1)
 	}
 }
@@ -31,97 +30,50 @@ func run() error {
 		return fmt.Errorf("parse flags: %w", err)
 	}
 
-	log.Println("init tickers")
+	log.Println("init logger")
+	zl, err := logger.NewZapLogger(conf.logLvl)
+	if err != nil {
+		return fmt.Errorf("init logger: %w", err)
+	}
+
+	zl.Info("init tickers")
 	poolTicker := time.NewTicker(conf.pollInterval)
 	defer poolTicker.Stop()
 
 	reportTicker := time.NewTicker(conf.reportInterval)
 	defer reportTicker.Stop()
 
-	client := resty.New()
+	zl.Info("init resty client")
+
+	zl.Info("init agent")
+	agent := agent.New(conf.addr)
+
+	zl.Info("init collection")
 	collection := model.NewCollection()
-	url := buildURL(conf.addr)
+
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer cancel()
 
 	for {
 		var send bool
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-poolTicker.C:
 		case <-reportTicker.C:
 			send = true
 		}
-		log.Println("collect metrics")
+		zl.Info("collect metrics")
+
 		metrics := collection.Collect()
 
 		if send {
-			log.Println("send metrics")
+			zl.Info("send metrics")
 			for _, metric := range metrics {
-				if err := sendMetric(client, url, metric); err != nil {
-					log.Printf("can't send metric [%+v]: %v", metric, err)
+				if err := agent.SendMetric(ctx, metric); err != nil {
+					zl.Error("can't send metric", zap.Any("metric", metric), zap.Error(err))
 				}
 			}
 		}
 	}
-}
-
-func sendMetric(client *resty.Client, url string, metric model.Metric) error {
-	req := buildRequest(metric)
-	body, err := buildBody(req)
-	if err != nil {
-		return fmt.Errorf("build body: %w", err)
-	}
-
-	_, err = client.R().
-		SetHeader("Content-Type", "application/json").
-		SetHeader("Content-Encoding", "gzip").
-		SetBody(body).
-		Post(url)
-	if errors.Is(err, io.EOF) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("post: %w", err)
-	}
-	return nil
-}
-
-func buildURL(addr string) string {
-	u := url.URL{
-		Scheme: "http",
-		Host:   addr,
-		Path:   "/update/",
-	}
-
-	return u.String()
-}
-
-func buildRequest(metric model.Metric) model.Metrics {
-	m := model.Metrics{
-		ID:    metric.Name,
-		MType: metric.Value.Type.String(),
-	}
-
-	switch metric.Value.Type {
-	case model.TypeGauge:
-		m.Value = &metric.Value.Gauge
-	case model.TypeCounter:
-		m.Delta = &metric.Value.Counter
-	}
-
-	return m
-}
-
-func buildBody(m model.Metrics) ([]byte, error) {
-	var buf bytes.Buffer
-	gz := gzip.NewWriter(&buf)
-
-	p, err := easyjson.Marshal(m)
-	if err != nil {
-		return nil, fmt.Errorf("can't marshal metrics: %w", err)
-	}
-	_, err = gz.Write(p)
-	if err != nil {
-		return nil, fmt.Errorf("can't write: %w", err)
-	}
-	gz.Close()
-	return buf.Bytes(), nil
 }

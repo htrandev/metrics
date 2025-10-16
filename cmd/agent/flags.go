@@ -12,6 +12,7 @@ type config struct {
 	addr           string
 	reportInterval time.Duration
 	pollInterval   time.Duration
+	logLvl         string
 }
 
 func parseFlags() (*config, error) {
@@ -22,6 +23,7 @@ func parseFlags() (*config, error) {
 	flag.StringVar(&c.addr, "a", "localhost:8080", "address to run server")
 	flag.IntVar(&report, "r", 10, "report interval in seconds")
 	flag.IntVar(&poll, "p", 2, "poll interval in seconds")
+	flag.StringVar(&c.logLvl, "lvl", "debug", "log level")
 
 	flag.Parse()
 
@@ -44,6 +46,10 @@ func parseFlags() (*config, error) {
 			return nil, fmt.Errorf("parse poll interval: %w", err)
 		}
 		c.pollInterval = time.Duration(v) * time.Second
+	}
+
+	if lvl := os.Getenv("LOG_LEVEL"); lvl != "" {
+		c.logLvl = lvl
 	}
 
 	return &c, nil
