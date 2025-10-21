@@ -1,7 +1,8 @@
-package memstorage
+package local
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -9,8 +10,18 @@ import (
 	"github.com/htrandev/metrics/internal/model"
 )
 
+var tempLogFileName = "tempTest.log"
+
 func TestStore(t *testing.T) {
-	emptyMemstorage := NewRepository()
+	emptyMemstorage, err := NewRepository(&StorageOptions{
+		FileName: tempLogFileName,
+	})
+	require.NoError(t, err)
+
+	defer func() {
+		err := os.Remove(tempLogFileName)
+		require.NoError(t, err)
+	}()
 
 	testCases := []struct {
 		name          string
@@ -100,7 +111,13 @@ func TestStore(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	emptyMemstorage := NewRepository()
+	emptyMemstorage, err := NewRepository(&StorageOptions{FileName: tempLogFileName})
+	require.NoError(t, err)
+
+	defer func() {
+		err := os.Remove(tempLogFileName)
+		require.NoError(t, err)
+	}()
 
 	testCases := []struct {
 		name           string
@@ -145,7 +162,13 @@ func TestGet(t *testing.T) {
 }
 
 func TestGetAll(t *testing.T) {
-	emptyMemstorage := NewRepository()
+	emptyMemstorage, err := NewRepository(&StorageOptions{FileName: tempLogFileName})
+	require.NoError(t, err)
+
+	defer func() {
+		err := os.Remove(tempLogFileName)
+		require.NoError(t, err)
+	}()
 
 	testCases := []struct {
 		name           string
@@ -192,6 +215,11 @@ func TestGetAll(t *testing.T) {
 func TestSet(t *testing.T) {
 	ctx := context.Background()
 
+	defer func() {
+		err := os.Remove(tempLogFileName)
+		require.NoError(t, err)
+	}()
+
 	testCases := []struct {
 		name           string
 		storage        *MemStorage
@@ -199,8 +227,12 @@ func TestSet(t *testing.T) {
 		expetedMetrics []model.Metric
 	}{
 		{
-			name:    "valid empty gauge",
-			storage: NewRepository(),
+			name: "valid empty gauge",
+			storage: func() *MemStorage {
+				s, err := NewRepository(&StorageOptions{FileName: tempLogFileName})
+				require.NoError(t, err)
+				return s
+			}(),
 			req: &model.Metric{
 				Name:  "gauge",
 				Value: model.MetricValue{Type: model.TypeGauge, Gauge: 0.2},
@@ -211,8 +243,12 @@ func TestSet(t *testing.T) {
 			}},
 		},
 		{
-			name:    "valid empty counter",
-			storage: NewRepository(),
+			name: "valid empty counter",
+			storage: func() *MemStorage {
+				s, err := NewRepository(&StorageOptions{FileName: tempLogFileName})
+				require.NoError(t, err)
+				return s
+			}(),
 			req: &model.Metric{
 				Name:  "counter",
 				Value: model.MetricValue{Type: model.TypeCounter, Counter: 2},
@@ -223,8 +259,12 @@ func TestSet(t *testing.T) {
 			}},
 		},
 		{
-			name:           "valid nil request",
-			storage:        NewRepository(),
+			name: "valid nil request",
+			storage: func() *MemStorage {
+				s, err := NewRepository(&StorageOptions{FileName: tempLogFileName})
+				require.NoError(t, err)
+				return s
+			}(),
 			req:            nil,
 			expetedMetrics: []model.Metric{},
 		},
@@ -283,7 +323,8 @@ func filledMemStorage(t *testing.T) *MemStorage {
 	t.Helper()
 	ctx := context.Background()
 
-	memstorage := NewRepository()
+	memstorage, err := NewRepository(&StorageOptions{FileName: tempLogFileName})
+	require.NoError(t, err)
 	if err := memstorage.Store(ctx, &model.Metric{
 		Name:  "gauge",
 		Value: model.MetricValue{Type: model.TypeGauge, Gauge: 0.1},

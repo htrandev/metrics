@@ -11,15 +11,14 @@ import (
 	"syscall"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/htrandev/metrics/internal/handler"
 	"github.com/htrandev/metrics/internal/model"
-	"github.com/htrandev/metrics/internal/repository/file"
-	"github.com/htrandev/metrics/internal/repository/memstorage"
+	"github.com/htrandev/metrics/internal/repository/local"
 	"github.com/htrandev/metrics/internal/repository/postgres"
 	"github.com/htrandev/metrics/internal/router"
 	"github.com/htrandev/metrics/internal/service/metrics"
-	"github.com/htrandev/metrics/internal/service/restore"
-
 	"github.com/htrandev/metrics/pkg/logger"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -49,47 +48,20 @@ func run() error {
 	defer cancel()
 
 	zl.Info("init storage")
-	storage, err := newStorage(flags)
+	storage, err := newStorage(flags, zl)
 	if err != nil {
 		return fmt.Errorf("init storage: %w", err)
 	}
-
-	zl.Info("init file storage")
-	fileRepository, err := file.NewRepository(flags.filePath)
-	if err != nil {
-		return fmt.Errorf("init file repository: %w", err)
-	}
-	defer func() { _ = fileRepository.Close() }()
+	defer storage.Close()
 
 	zl.Info("init metric service")
 	metricService := metrics.NewService(&metrics.ServiseOptions{
-		Logger:        zl,
-		StoreInterval: flags.storeInterval,
-		Flusher:       fileRepository,
-		Storage:       storage,
+		Logger:  zl,
+		Storage: storage,
 	})
 
 	zl.Info("init handler")
 	metricHandler := handler.NewMetricsHandler(zl, metricService)
-
-	zl.Info("run flusher")
-	go metricService.Run(ctx)
-
-	if flags.restore {
-		zl.Info("restore previous metrics")
-		restoreService, err := restore.NewService(flags.filePath, storage, zl)
-		if err != nil {
-			return fmt.Errorf("init restore service: %w", err)
-		}
-		defer func() { _ = restoreService.Close() }()
-
-		restoreCtx, restoreCancel := context.WithTimeout(ctx, 1*time.Minute)
-		defer restoreCancel()
-
-		if err := restoreService.Restore(restoreCtx); err != nil {
-			return fmt.Errorf("can't restore metrics ferom file: %w", err)
-		}
-	}
 
 	zl.Info("init router")
 	router, err := router.New(zl, metricHandler)
@@ -123,8 +95,10 @@ func run() error {
 	return nil
 }
 
-func newStorage(cfg flags) (model.Storager, error) {
+func newStorage(cfg flags, logger *zap.Logger) (model.Storager, error) {
 	var storage model.Storager
+	var err error
+
 	switch {
 	case cfg.databaseDsn != "":
 		db, err := sql.Open("pgx", cfg.databaseDsn)
@@ -132,8 +106,22 @@ func newStorage(cfg flags) (model.Storager, error) {
 			return nil, fmt.Errorf("open db: %w", err)
 		}
 		storage = postgres.New(db)
+	case cfg.restore:
+		storage, err = local.NewRestore(&local.StorageOptions{
+			FileName: cfg.filePath,
+			Interval: cfg.storeInterval,
+			Logger:   logger,
+		})
 	default:
-		storage = memstorage.NewRepository()
+		storage, err = local.NewRepository(&local.StorageOptions{
+			FileName: cfg.filePath,
+			Interval: cfg.storeInterval,
+			Logger:   logger,
+		})
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("creating storage: %w", err)
 	}
 
 	return storage, nil

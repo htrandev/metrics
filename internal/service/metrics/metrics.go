@@ -3,19 +3,11 @@ package metrics
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"go.uber.org/zap"
 
 	"github.com/htrandev/metrics/internal/model"
 )
-
-const defaultInterval = 300 * time.Second
-
-var defaultOpts = &ServiseOptions{
-	StoreInterval: defaultInterval,
-	Logger:        &zap.Logger{},
-}
 
 type Storage interface {
 	Get(ctx context.Context, name string) (model.Metric, error)
@@ -29,10 +21,8 @@ type FileStorage interface {
 }
 
 type ServiseOptions struct {
-	StoreInterval time.Duration
-	Logger        *zap.Logger
+	Logger *zap.Logger
 
-	Flusher FileStorage
 	Storage Storage
 }
 
@@ -41,9 +31,6 @@ type MetricsService struct {
 }
 
 func NewService(opts *ServiseOptions) *MetricsService {
-	if opts.StoreInterval == 0 {
-		opts.StoreInterval = defaultInterval
-	}
 	return &MetricsService{
 		opts: opts,
 	}
@@ -78,26 +65,4 @@ func (s *MetricsService) Store(ctx context.Context, m *model.Metric) error {
 		return fmt.Errorf("get all metrics: %w", err)
 	}
 	return nil
-}
-
-func (s *MetricsService) Run(ctx context.Context) {
-	ticker := time.NewTicker(s.opts.StoreInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			metrics, err := s.opts.Storage.GetAll(ctx)
-			if err != nil {
-				s.opts.Logger.Error("get all metrics to flush", zap.Error(err), zap.String("scope", "Run"))
-				continue
-			}
-			if err := s.opts.Flusher.Flush(ctx, metrics); err != nil {
-				s.opts.Logger.Error("flush metrics", zap.Error(err), zap.String("scope", "Run"))
-				continue
-			}
-		}
-	}
 }

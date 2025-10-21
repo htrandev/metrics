@@ -23,7 +23,7 @@ func (r *PostgresRepository) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (r *PostgresRepository) Close(ctx context.Context) error {
+func (r *PostgresRepository) Close() error {
 	return r.db.Close()
 }
 

@@ -30,6 +30,8 @@ func (m *mockStorage) Ping(_ context.Context) error {
 	return nil
 }
 
+func (m *mockStorage) Close() error { return nil }
+
 func (m *mockStorage) Set(_ context.Context, _ *model.Metric) error {
 	return nil
 }

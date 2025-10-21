@@ -12,6 +12,7 @@ type Storager interface {
 	Store(ctx context.Context, metric *Metric) error
 	Set(ctx context.Context, metric *Metric) error
 	Ping(ctx context.Context) error
+	Close() error
 }
 
 //easyjson:json
