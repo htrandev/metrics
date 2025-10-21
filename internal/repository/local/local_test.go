@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 
 	"github.com/htrandev/metrics/internal/model"
 )
@@ -15,6 +16,7 @@ var tempLogFileName = "tempTest.log"
 func TestStore(t *testing.T) {
 	emptyMemstorage, err := NewRepository(&StorageOptions{
 		FileName: tempLogFileName,
+		Logger:   zap.NewNop(),
 	})
 	require.NoError(t, err)
 
@@ -111,7 +113,10 @@ func TestStore(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	emptyMemstorage, err := NewRepository(&StorageOptions{FileName: tempLogFileName})
+	emptyMemstorage, err := NewRepository(&StorageOptions{
+		FileName: tempLogFileName,
+		Logger:   zap.NewNop(),
+	})
 	require.NoError(t, err)
 
 	defer func() {
@@ -162,7 +167,10 @@ func TestGet(t *testing.T) {
 }
 
 func TestGetAll(t *testing.T) {
-	emptyMemstorage, err := NewRepository(&StorageOptions{FileName: tempLogFileName})
+	emptyMemstorage, err := NewRepository(&StorageOptions{
+		FileName: tempLogFileName,
+		Logger:   zap.NewNop(),
+	})
 	require.NoError(t, err)
 
 	defer func() {
@@ -229,7 +237,10 @@ func TestSet(t *testing.T) {
 		{
 			name: "valid empty gauge",
 			storage: func() *MemStorage {
-				s, err := NewRepository(&StorageOptions{FileName: tempLogFileName})
+				s, err := NewRepository(&StorageOptions{
+					FileName: tempLogFileName,
+					Logger:   zap.NewNop(),
+				})
 				require.NoError(t, err)
 				return s
 			}(),
@@ -245,7 +256,10 @@ func TestSet(t *testing.T) {
 		{
 			name: "valid empty counter",
 			storage: func() *MemStorage {
-				s, err := NewRepository(&StorageOptions{FileName: tempLogFileName})
+				s, err := NewRepository(&StorageOptions{
+					FileName: tempLogFileName,
+					Logger:   zap.NewNop(),
+				})
 				require.NoError(t, err)
 				return s
 			}(),
@@ -261,7 +275,10 @@ func TestSet(t *testing.T) {
 		{
 			name: "valid nil request",
 			storage: func() *MemStorage {
-				s, err := NewRepository(&StorageOptions{FileName: tempLogFileName})
+				s, err := NewRepository(&StorageOptions{
+					FileName: tempLogFileName,
+					Logger:   zap.NewNop(),
+				})
 				require.NoError(t, err)
 				return s
 			}(),
@@ -323,8 +340,12 @@ func filledMemStorage(t *testing.T) *MemStorage {
 	t.Helper()
 	ctx := context.Background()
 
-	memstorage, err := NewRepository(&StorageOptions{FileName: tempLogFileName})
+	memstorage, err := NewRepository(&StorageOptions{
+		FileName: tempLogFileName,
+		Logger:   zap.NewNop(),
+	})
 	require.NoError(t, err)
+
 	if err := memstorage.Store(ctx, &model.Metric{
 		Name:  "gauge",
 		Value: model.MetricValue{Type: model.TypeGauge, Gauge: 0.1},
