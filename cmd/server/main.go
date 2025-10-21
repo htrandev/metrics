@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
@@ -15,7 +14,6 @@ import (
 	"github.com/htrandev/metrics/internal/model"
 	"github.com/htrandev/metrics/internal/repository/file"
 	"github.com/htrandev/metrics/internal/repository/memstorage"
-	"github.com/htrandev/metrics/internal/repository/postgres"
 	"github.com/htrandev/metrics/internal/router"
 	"github.com/htrandev/metrics/internal/service/metrics"
 	"github.com/htrandev/metrics/internal/service/restore"
@@ -126,12 +124,12 @@ func run() error {
 func newStorage(cfg *flags) (model.Storager, error) {
 	var storage model.Storager
 	switch {
-	case cfg.databaseDsn != "":
-		db, err := sql.Open("pgx", cfg.databaseDsn)
-		if err != nil {
-			return nil, fmt.Errorf("open db: %w", err)
-		}
-		storage = postgres.New(db)
+	// case cfg.databaseDsn != "":
+	// 	db, err := sql.Open("pgx", cfg.databaseDsn)
+	// 	if err != nil {
+	// 		return nil, fmt.Errorf("open db: %w", err)
+	// 	}
+	// 	storage = postgres.New(db)
 	default:
 		storage = memstorage.NewRepository()
 	}
