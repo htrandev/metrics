@@ -17,7 +17,7 @@ type flags struct {
 	databaseDsn   string
 }
 
-func parseFlags() (*flags, error) {
+func parseFlags() (flags, error) {
 	var f flags
 	var storeInterval int
 
@@ -26,7 +26,7 @@ func parseFlags() (*flags, error) {
 	flag.IntVar(&storeInterval, "i", 300, "interval of writeing metrics")
 	flag.StringVar(&f.filePath, "f", "metrics.log", "path to file to write metrics")
 	flag.BoolVar(&f.restore, "r", false, "restore previous metrics")
-	flag.StringVar(&f.databaseDsn, "d", "localhost:5432", "db dsn")
+	flag.StringVar(&f.databaseDsn, "d", "", "db dsn")
 
 	flag.Parse()
 
@@ -40,7 +40,7 @@ func parseFlags() (*flags, error) {
 	if si := os.Getenv("STORE_INTERVAL"); si != "" {
 		v, err := strconv.Atoi(si)
 		if err != nil {
-			return nil, fmt.Errorf("parse store interval: %w", err)
+			return f, fmt.Errorf("parse store interval: %w", err)
 		}
 		f.storeInterval = time.Duration(v) * time.Second
 	} else {
@@ -54,7 +54,7 @@ func parseFlags() (*flags, error) {
 	if r := os.Getenv("RESTORE"); r != "" {
 		restore, err := strconv.ParseBool(r)
 		if err != nil {
-			return nil, fmt.Errorf("parse restore: %w", err)
+			return f, fmt.Errorf("parse restore: %w", err)
 		}
 		f.restore = restore
 	}
@@ -63,5 +63,5 @@ func parseFlags() (*flags, error) {
 		f.databaseDsn = dsn
 	}
 
-	return &f, nil
+	return f, nil
 }
