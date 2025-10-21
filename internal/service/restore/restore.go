@@ -12,7 +12,7 @@ import (
 )
 
 type Storage interface {
-	Set(context.Context, *model.Metric) error
+	Set(ctx context.Context, metric *model.Metric) error
 }
 
 type RestoreService struct {
@@ -23,7 +23,7 @@ type RestoreService struct {
 	scanner *bufio.Scanner
 }
 
-func NewService(fileName string, s Storage, logger *zap.Logger) (*RestoreService, error) {
+func NewService(fileName string, s model.Storager, logger *zap.Logger) (*RestoreService, error) {
 	f, err := os.OpenFile(fileName, os.O_RDONLY|os.O_CREATE, 0644)
 	if err != nil {
 		return nil, fmt.Errorf("restore: open file: %w", err)
