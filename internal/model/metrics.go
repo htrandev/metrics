@@ -1,9 +1,18 @@
 package model
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 )
+
+type Storager interface {
+	Get(ctx context.Context, name string) (Metric, error)
+	GetAll(ctx context.Context) ([]Metric, error)
+	Store(ctx context.Context, metric *Metric) error
+	Set(ctx context.Context, metric *Metric) error
+	Ping(ctx context.Context) error
+}
 
 //easyjson:json
 type Metrics struct {

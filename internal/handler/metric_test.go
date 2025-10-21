@@ -69,6 +69,10 @@ func (m *mockService) GetAll(context.Context) ([]model.Metric, error) {
 	return nil, nil
 }
 
+func (m *mockService) Ping(context.Context) error {
+	return nil
+}
+
 func TestUpdateHandler(t *testing.T) {
 	log, err := logger.NewZapLogger("debug")
 	require.NoError(t, err)
@@ -126,8 +130,6 @@ func TestUpdateHandler(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
-				nil,
-				0,
 			)
 
 			mux := http.NewServeMux()
@@ -199,8 +201,6 @@ func TestGetHandler(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
-				nil,
-				0,
 			)
 
 			mux := http.NewServeMux()
@@ -261,8 +261,6 @@ func TestGetAll(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
-				nil,
-				0,
 			)
 			handler := http.HandlerFunc(h.GetAll)
 			srv := httptest.NewServer(handler)
@@ -362,8 +360,6 @@ func TestUpdateViaBody(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
-				nil,
-				0,
 			)
 			handler := http.HandlerFunc(h.UpdateJSON)
 			srv := httptest.NewServer(handler)
@@ -473,8 +469,6 @@ func TestGetViaBody(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
-				nil,
-				0,
 			)
 			handler := http.HandlerFunc(h.GetJSON)
 			srv := httptest.NewServer(handler)

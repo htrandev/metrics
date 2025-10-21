@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/mailru/easyjson"
 	"go.uber.org/zap"
@@ -14,62 +13,25 @@ import (
 	"github.com/htrandev/metrics/internal/model"
 )
 
-const defaultInterval = 300 * time.Second
-
 type Service interface {
 	Get(ctx context.Context, name string) (model.Metric, error)
 	GetAll(ctx context.Context) ([]model.Metric, error)
 	Store(ctx context.Context, metric *model.Metric) error
-}
-
-type FileStorage interface {
-	Flush(context.Context, []model.Metric) error
+	Ping(ctx context.Context) error
 }
 
 type MetricHandler struct {
-	storeInterval time.Duration
-
 	service Service
-	flusher FileStorage
 	logger  *zap.Logger
 }
 
 func NewMetricsHandler(
 	l *zap.Logger,
 	s Service,
-	flusher FileStorage,
-	interval time.Duration,
 ) *MetricHandler {
-	if interval == 0 {
-		interval = defaultInterval
-	}
 	return &MetricHandler{
-		logger:        l,
-		service:       s,
-		flusher:       flusher,
-		storeInterval: interval,
-	}
-}
-
-func (h *MetricHandler) Run(ctx context.Context) {
-	ticker := time.NewTicker(h.storeInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			metrics, err := h.service.GetAll(ctx)
-			if err != nil {
-				h.logger.Error("get all metrics to flush", zap.Error(err), zap.String("scope", "Run"))
-				continue
-			}
-			if err := h.flusher.Flush(ctx, metrics); err != nil {
-				h.logger.Error("flush metrics", zap.Error(err), zap.String("scope", "Run"))
-				continue
-			}
-		}
+		logger:  l,
+		service: s,
 	}
 }
 
@@ -247,6 +209,17 @@ func (h *MetricHandler) GetJSON(rw http.ResponseWriter, r *http.Request) {
 	rw.Header().Set("Content-Type", "application/json")
 	rw.WriteHeader(http.StatusOK)
 	rw.Write(body)
+}
+
+func (h *MetricHandler) Ping(rw http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if err := h.service.Ping(ctx); err != nil {
+		h.logger.Error("ping", zap.Error(err), zap.String("scope", "handler/Ping"))
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	rw.WriteHeader(http.StatusOK)
 }
 
 func buildUpdateRequest(r *http.Request) (*model.Metric, error) {

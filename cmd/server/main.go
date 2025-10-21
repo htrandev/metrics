@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,12 +12,17 @@ import (
 	"time"
 
 	"github.com/htrandev/metrics/internal/handler"
+	"github.com/htrandev/metrics/internal/model"
 	"github.com/htrandev/metrics/internal/repository/file"
 	"github.com/htrandev/metrics/internal/repository/memstorage"
+	"github.com/htrandev/metrics/internal/repository/postgres"
 	"github.com/htrandev/metrics/internal/router"
 	"github.com/htrandev/metrics/internal/service/metrics"
 	"github.com/htrandev/metrics/internal/service/restore"
+
 	"github.com/htrandev/metrics/pkg/logger"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func main() {
@@ -42,8 +48,11 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	zl.Info("init mem storage")
-	memStorageRepository := memstorage.NewRepository()
+	zl.Info("init storage")
+	storage, err := newStorage(flags)
+	if err != nil {
+		return fmt.Errorf("init storage: %w", err)
+	}
 
 	zl.Info("init file storage")
 	fileRepository, err := file.NewRepository(flags.filePath)
@@ -53,22 +62,22 @@ func run() error {
 	defer func() { _ = fileRepository.Close() }()
 
 	zl.Info("init metric service")
-	metricService := metrics.NewService(memStorageRepository)
+	metricService := metrics.NewService(&metrics.ServiseOptions{
+		Logger:        zl,
+		StoreInterval: flags.storeInterval,
+		Flusher:       fileRepository,
+		Storage:       storage,
+	})
 
 	zl.Info("init handler")
-	metricHandler := handler.NewMetricsHandler(
-		zl,
-		metricService,
-		fileRepository,
-		flags.storeInterval,
-	)
+	metricHandler := handler.NewMetricsHandler(zl, metricService)
 
 	zl.Info("run flusher")
-	go metricHandler.Run(ctx)
+	go metricService.Run(ctx)
 
 	if flags.restore {
 		zl.Info("restore previous metrics")
-		restoreService, err := restore.NewService(flags.filePath, memStorageRepository, zl)
+		restoreService, err := restore.NewService(flags.filePath, storage, zl)
 		if err != nil {
 			return fmt.Errorf("init restore service: %w", err)
 		}
@@ -80,7 +89,6 @@ func run() error {
 		if err := restoreService.Restore(restoreCtx); err != nil {
 			return fmt.Errorf("can't restore metrics ferom file: %w", err)
 		}
-
 	}
 
 	zl.Info("init router")
@@ -113,4 +121,20 @@ func run() error {
 		return fmt.Errorf("shutdown server: %w", err)
 	}
 	return nil
+}
+
+func newStorage(cfg *flags) (model.Storager, error) {
+	var storage model.Storager
+	switch {
+	case cfg.databaseDsn != "":
+		db, err := sql.Open("pgx", cfg.databaseDsn)
+		if err != nil {
+			return nil, fmt.Errorf("open db: %w", err)
+		}
+		storage = postgres.New(db)
+	default:
+		storage = memstorage.NewRepository()
+	}
+
+	return storage, nil
 }

@@ -15,7 +15,7 @@ var (
 	errGetAll = errors.New("getAll error")
 )
 
-var _ Storage = (*mockStorage)(nil)
+var _ model.Storager = (*mockStorage)(nil)
 
 type mockStorage struct {
 	getErr    bool
@@ -24,6 +24,14 @@ type mockStorage struct {
 
 	gauge  bool
 	filled bool
+}
+
+func (m *mockStorage) Ping(_ context.Context) error {
+	return nil
+}
+
+func (m *mockStorage) Set(_ context.Context, _ *model.Metric) error {
+	return nil
 }
 
 func (m *mockStorage) Get(_ context.Context, _ string) (model.Metric, error) {
@@ -102,7 +110,7 @@ func TestGet(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := NewService(tc.storage)
+			s := NewService(&ServiseOptions{Storage: tc.storage})
 
 			m, err := s.Get(ctx, tc.metricName)
 			if tc.wantErr {
@@ -148,7 +156,7 @@ func TestGetAll(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := NewService(tc.storage)
+			s := NewService(&ServiseOptions{Storage: tc.storage})
 
 			m, err := s.GetAll(ctx)
 			if tc.wantErr {
@@ -195,7 +203,7 @@ func TestStore(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := NewService(tc.storage)
+			s := NewService(&ServiseOptions{Storage: tc.storage})
 
 			err := s.Store(ctx, tc.metric)
 			if tc.wantErr {

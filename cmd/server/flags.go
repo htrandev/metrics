@@ -14,6 +14,7 @@ type flags struct {
 	storeInterval time.Duration
 	filePath      string
 	restore       bool
+	databaseDsn   string
 }
 
 func parseFlags() (*flags, error) {
@@ -25,6 +26,8 @@ func parseFlags() (*flags, error) {
 	flag.IntVar(&storeInterval, "i", 300, "interval of writeing metrics")
 	flag.StringVar(&f.filePath, "f", "metrics.log", "path to file to write metrics")
 	flag.BoolVar(&f.restore, "r", false, "restore previous metrics")
+	flag.StringVar(&f.databaseDsn, "d", "localhost:5432", "db dsn")
+
 	flag.Parse()
 
 	if addr := os.Getenv("ADDRESS"); addr != "" {
@@ -54,6 +57,10 @@ func parseFlags() (*flags, error) {
 			return nil, fmt.Errorf("parse restore: %w", err)
 		}
 		f.restore = restore
+	}
+
+	if dsn := os.Getenv("DATABASE_DSN"); dsn != "" {
+		f.databaseDsn = dsn
 	}
 
 	return &f, nil

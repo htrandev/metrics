@@ -43,5 +43,9 @@ func New(logger *zap.Logger, handler *handler.MetricHandler) (*chi.Mux, error) {
 		middleware.Compress(),
 	).Post("/value/", handler.GetJSON)
 
+	r.With(
+		middleware.MethodChecker(http.MethodGet),
+	).Get("/ping", handler.Ping)
+
 	return r, nil
 }

@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"sync"
 
 	"github.com/htrandev/metrics/internal/model"
 )
 
 type MemStorage struct {
 	metrics map[string]model.Metric
+	mu      sync.RWMutex
 }
 
 func NewRepository() *MemStorage {
@@ -20,6 +22,12 @@ func NewRepository() *MemStorage {
 	}
 }
 
+func (m *MemStorage) Ping(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return nil
+}
+
 // Set записывает значение метрики.
 // Если метрика уже существует, то ничего не делает.
 func (m *MemStorage) Set(Ctx context.Context, request *model.Metric) error {
@@ -27,6 +35,9 @@ func (m *MemStorage) Set(Ctx context.Context, request *model.Metric) error {
 		log.Println("repository: request is nil")
 		return nil
 	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	if _, ok := m.metrics[request.Name]; !ok {
 		m.metrics[request.Name] = *request
@@ -42,6 +53,10 @@ func (m *MemStorage) Store(ctx context.Context, request *model.Metric) error {
 		log.Println("repository: request is nil")
 		return nil
 	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	metric, ok := m.metrics[request.Name]
 	if !ok {
 		m.metrics[request.Name] = *request
@@ -61,6 +76,9 @@ func (m *MemStorage) Store(ctx context.Context, request *model.Metric) error {
 
 // Get возвращает метрику по имени.
 func (m *MemStorage) Get(ctx context.Context, name string) (model.Metric, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	metric, ok := m.metrics[name]
 	if !ok {
 		return model.Metric{}, fmt.Errorf("metric with name [%s] not found", name)
@@ -71,6 +89,10 @@ func (m *MemStorage) Get(ctx context.Context, name string) (model.Metric, error)
 // GetAll возвращает все метрики.
 func (m *MemStorage) GetAll(ctx context.Context) ([]model.Metric, error) {
 	metrics := make([]model.Metric, 0, len(m.metrics))
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	for _, metric := range m.metrics {
 		metrics = append(metrics, metric)
 	}
