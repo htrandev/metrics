@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/htrandev/metrics/internal/model"
+	"github.com/htrandev/metrics/internal/repository"
 	"github.com/htrandev/metrics/pkg/logger"
 )
 
@@ -26,8 +27,9 @@ var (
 type mockService struct {
 	storeErr bool
 
-	getErr bool
-	gauge  bool
+	notFound bool
+	getErr   bool
+	gauge    bool
 
 	getAll bool
 	filled bool
@@ -43,6 +45,9 @@ func (m *mockService) Store(context.Context, *model.Metric) error {
 }
 
 func (m *mockService) Get(context.Context, string) (model.Metric, error) {
+	if m.notFound {
+		return model.Metric{}, repository.ErrNotFound
+	}
 	if m.getErr {
 		return model.Metric{}, errGet
 	}
@@ -186,6 +191,14 @@ func TestGetHandler(t *testing.T) {
 		{
 			name:         "get error",
 			service:      &mockService{getErr: true},
+			method:       http.MethodGet,
+			url:          "/value/counter/test",
+			wantErr:      true,
+			expectedCode: http.StatusInternalServerError,
+		},
+		{
+			name:         "not found",
+			service:      &mockService{notFound: true},
 			method:       http.MethodGet,
 			url:          "/value/counter/test",
 			wantErr:      true,
@@ -453,6 +466,18 @@ func TestGetViaBody(t *testing.T) {
 		{
 			name:         "get error",
 			service:      &mockService{getErr: true},
+			method:       http.MethodPost,
+			expectedCode: http.StatusInternalServerError,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"test","type":"counter"}`))
+			}(),
+			expectedBody: func() string {
+				return ``
+			}(),
+		},
+		{
+			name:         "not found",
+			service:      &mockService{notFound: true},
 			method:       http.MethodPost,
 			expectedCode: http.StatusNotFound,
 			body: func() io.Reader {

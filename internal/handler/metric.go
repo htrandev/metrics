@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -50,7 +51,7 @@ func (h *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	metric, err := h.service.Get(ctx, metricName)
-	if err == repository.ErrNotFound {
+	if errors.Is(err, repository.ErrNotFound) {
 		h.logger.Error("metric not found", zap.String("scope", "handler/Get"))
 		rw.WriteHeader(http.StatusNotFound)
 	}
@@ -196,9 +197,13 @@ func (h *MetricHandler) GetJSON(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	m, err := h.service.Get(ctx, req.Name)
+	if errors.Is(err, repository.ErrNotFound) {
+		h.logger.Error("metric not found", zap.Error(err), zap.String("scope", "handler/GetJSON"))
+		rw.WriteHeader(http.StatusNotFound)
+	}
 	if err != nil {
 		h.logger.Error("get from storage", zap.Error(err), zap.String("scope", "handler/GetJSON"))
-		rw.WriteHeader(http.StatusNotFound)
+		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
