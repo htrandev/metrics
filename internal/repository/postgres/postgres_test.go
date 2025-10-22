@@ -20,7 +20,7 @@ func setupTesting(t *testing.T) *PostgresRepository {
 	t.Helper()
 
 	const (
-		dsn = "postgres://postgres:postgres@localhost:5432/praktikum"
+		dsn = "postgres://postgres:postgres@postgres:5432/praktikum"
 	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
