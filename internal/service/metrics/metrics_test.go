@@ -14,6 +14,7 @@ var (
 	errStore  = errors.New("store error")
 	errGet    = errors.New("get error")
 	errGetAll = errors.New("getAll error")
+	errPing   = errors.New("ping error")
 )
 
 var _ model.Storager = (*mockStorage)(nil)
@@ -22,12 +23,16 @@ type mockStorage struct {
 	getErr    bool
 	getAllErr bool
 	storeErr  bool
+	pingErr   bool
 
 	gauge  bool
 	filled bool
 }
 
 func (m *mockStorage) Ping(_ context.Context) error {
+	if m.pingErr {
+		return errPing
+	}
 	return nil
 }
 
@@ -123,7 +128,6 @@ func TestGet(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tc.expectedMetric, m)
-
 		})
 	}
 }
@@ -169,7 +173,6 @@ func TestGetAll(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tc.expectedMetric, m)
-
 		})
 	}
 }
@@ -215,7 +218,42 @@ func TestStore(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
+		})
+	}
+}
 
+func TestPing(t *testing.T) {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name          string
+		storage       *mockStorage
+		wantErr       bool
+		expectedError error
+	}{
+		{
+			name:    "valid",
+			storage: &mockStorage{},
+			wantErr: false,
+		},
+		{
+			name:          "invalid",
+			storage:       &mockStorage{pingErr: true},
+			wantErr:       true,
+			expectedError: errPing,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewService(&ServiseOptions{Storage: tc.storage})
+			err := s.Ping(ctx)
+			if tc.wantErr {
+				require.Error(t, err)
+				require.ErrorIs(t, err, tc.expectedError)
+				return
+			}
+			require.NoError(t, err)
 		})
 	}
 }

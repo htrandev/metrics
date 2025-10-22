@@ -12,20 +12,22 @@ import (
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 
 	"github.com/htrandev/metrics/internal/model"
 	"github.com/htrandev/metrics/internal/repository"
-	"github.com/htrandev/metrics/pkg/logger"
 )
 
 var (
 	errStore  = errors.New("store error")
 	errGet    = errors.New("get error")
 	errGetAll = errors.New("getAll error")
+	errPing   = errors.New("ping error")
 )
 
 type mockService struct {
 	storeErr bool
+	pingErr  bool
 
 	notFound bool
 	getErr   bool
@@ -75,12 +77,14 @@ func (m *mockService) GetAll(context.Context) ([]model.Metric, error) {
 }
 
 func (m *mockService) Ping(context.Context) error {
+	if m.pingErr {
+		return errPing
+	}
 	return nil
 }
 
 func TestUpdateHandler(t *testing.T) {
-	log, err := logger.NewZapLogger("debug")
-	require.NoError(t, err)
+	log := zap.NewNop()
 
 	testCases := []struct {
 		name         string
@@ -150,8 +154,7 @@ func TestUpdateHandler(t *testing.T) {
 }
 
 func TestGetHandler(t *testing.T) {
-	log, err := logger.NewZapLogger("debug")
-	require.NoError(t, err)
+	log := zap.NewNop()
 
 	testCases := []struct {
 		name             string
@@ -233,8 +236,7 @@ func TestGetHandler(t *testing.T) {
 }
 
 func TestGetAll(t *testing.T) {
-	log, err := logger.NewZapLogger("debug")
-	require.NoError(t, err)
+	log := zap.NewNop()
 
 	testCases := []struct {
 		name             string
@@ -292,9 +294,8 @@ func TestGetAll(t *testing.T) {
 	}
 }
 
-func TestUpdateViaBody(t *testing.T) {
-	log, err := logger.NewZapLogger("debug")
-	require.NoError(t, err)
+func TestUpdateJSON(t *testing.T) {
+	log := zap.NewNop()
 
 	testCases := []struct {
 		name         string
@@ -391,9 +392,8 @@ func TestUpdateViaBody(t *testing.T) {
 	}
 }
 
-func TestGetViaBody(t *testing.T) {
-	log, err := logger.NewZapLogger("debug")
-	require.NoError(t, err)
+func TestGetJSON(t *testing.T) {
+	log := zap.NewNop()
 
 	testCases := []struct {
 		name         string
@@ -511,6 +511,49 @@ func TestGetViaBody(t *testing.T) {
 			require.EqualValues(t, tc.expectedBody, string(resp.Body()))
 		})
 	}
+}
+
+func TestPing(t *testing.T) {
+	log := zap.NewNop()
+
+	testCases := []struct {
+		name         string
+		service      *mockService
+		expectedCode int
+	}{
+		{
+			name:         "valid",
+			service:      &mockService{},
+			expectedCode: http.StatusOK,
+		},
+		{
+			name:         "invalid",
+			service:      &mockService{pingErr: true},
+			expectedCode: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := NewMetricsHandler(
+				log,
+				tc.service,
+			)
+			handler := http.HandlerFunc(h.Ping)
+			srv := httptest.NewServer(handler)
+			defer srv.Close()
+
+			req := resty.New().R()
+			req.Method = http.MethodGet
+			req.URL = srv.URL
+
+			resp, err := req.Send()
+			assert.NoError(t, err, "error making HTTP request")
+
+			require.EqualValues(t, tc.expectedCode, resp.StatusCode())
+		})
+	}
+
 }
 
 func filledStorage() []model.Metric {

@@ -108,7 +108,7 @@ func newStorage(ctx context.Context, cfg flags, logger *zap.Logger) (model.Stora
 		if err != nil {
 			return nil, fmt.Errorf("open db: %w", err)
 		}
-		storage = postgres.New(db, "/migrations")
+		storage = postgres.New(db)
 
 		logger.Info("init provider")
 		provider, err := goose.NewProvider(database.DialectPostgres, db, migrations.Embed)

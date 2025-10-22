@@ -8,16 +8,13 @@ import (
 	"github.com/htrandev/metrics/internal/model"
 )
 
-// postgres://user:password@localhost:25432/practicum
 type PostgresRepository struct {
-	db             *sql.DB
-	migrationsPath string
+	db *sql.DB
 }
 
-func New(db *sql.DB, migrationsPath string) *PostgresRepository {
+func New(db *sql.DB) *PostgresRepository {
 	return &PostgresRepository{
-		db:             db,
-		migrationsPath: migrationsPath,
+		db: db,
 	}
 }
 
@@ -30,6 +27,14 @@ func (r *PostgresRepository) Ping(ctx context.Context) error {
 
 func (r *PostgresRepository) Close() error {
 	return r.db.Close()
+}
+
+func (r *PostgresRepository) Truncate(ctx context.Context) error {
+	_, err := r.db.ExecContext(ctx, `TRUNCATE TABLE metrics`)
+	if err != nil {
+		return fmt.Errorf("repository/truncate: exec: %w", err)
+	}
+	return nil
 }
 
 func (r *PostgresRepository) Get(ctx context.Context, name string) (model.Metric, error) {
