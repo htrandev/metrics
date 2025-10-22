@@ -20,9 +20,7 @@ func setupTesting(t *testing.T) *PostgresRepository {
 	t.Helper()
 
 	const (
-		dsn            = "postgres://user:password@localhost:5432/practicum"
-		migrationsPath = "../../../migrations"
-		truncateQuery  = `TRUNCATE TABLE metrics`
+		dsn = "postgres://postgres:postgres@localhost:5432/praktikum"
 	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
