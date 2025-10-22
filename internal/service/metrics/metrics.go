@@ -62,7 +62,7 @@ func (s *MetricsService) Store(ctx context.Context, m *model.Metric) error {
 	}
 
 	if err := s.opts.Storage.Store(ctx, m); err != nil {
-		return fmt.Errorf("get all metrics: %w", err)
+		return fmt.Errorf("store metric: %w", err)
 	}
 	return nil
 }

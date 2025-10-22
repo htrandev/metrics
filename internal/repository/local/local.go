@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/htrandev/metrics/internal/model"
+	"github.com/htrandev/metrics/internal/repository"
 )
 
 type StorageOptions struct {
@@ -137,7 +138,7 @@ func (m *MemStorage) Get(ctx context.Context, name string) (model.Metric, error)
 
 	metric, ok := m.metrics[name]
 	if !ok {
-		return model.Metric{}, fmt.Errorf("metric with name [%s] not found", name)
+		return model.Metric{}, fmt.Errorf("metric with name [%s]: %w", name, repository.ErrNotFound)
 	}
 	return metric, nil
 }
@@ -225,4 +226,8 @@ func (m *MemStorage) restore() error {
 
 func (m *MemStorage) Close() error {
 	return m.file.Close()
+}
+
+func (m *MemStorage) Up() error {
+	return nil
 }

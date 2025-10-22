@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/htrandev/metrics/internal/model"
+	"github.com/htrandev/metrics/internal/repository"
 )
 
 type Service interface {
@@ -49,9 +50,13 @@ func (h *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	metric, err := h.service.Get(ctx, metricName)
+	if err == repository.ErrNotFound {
+		h.logger.Error("metric not found", zap.String("scope", "handler/Get"))
+		rw.WriteHeader(http.StatusNotFound)
+	}
 	if err != nil {
 		h.logger.Error("get from storage", zap.Error(err), zap.String("scope", "handler/Get"))
-		rw.WriteHeader(http.StatusNotFound)
+		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 

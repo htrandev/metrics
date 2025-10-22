@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pressly/goose/v3"
+	"github.com/pressly/goose/v3/database"
 	"go.uber.org/zap"
 
 	"github.com/htrandev/metrics/internal/handler"
@@ -19,6 +21,7 @@ import (
 	"github.com/htrandev/metrics/internal/repository/postgres"
 	"github.com/htrandev/metrics/internal/router"
 	"github.com/htrandev/metrics/internal/service/metrics"
+	"github.com/htrandev/metrics/migrations"
 	"github.com/htrandev/metrics/pkg/logger"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -48,7 +51,7 @@ func run() error {
 	defer cancel()
 
 	zl.Info("init storage")
-	storage, err := newStorage(flags, zl)
+	storage, err := newStorage(ctx, flags, zl)
 	if err != nil {
 		return fmt.Errorf("init storage: %w", err)
 	}
@@ -95,7 +98,7 @@ func run() error {
 	return nil
 }
 
-func newStorage(cfg flags, logger *zap.Logger) (model.Storager, error) {
+func newStorage(ctx context.Context, cfg flags, logger *zap.Logger) (model.Storager, error) {
 	var storage model.Storager
 	var err error
 
@@ -105,23 +108,36 @@ func newStorage(cfg flags, logger *zap.Logger) (model.Storager, error) {
 		if err != nil {
 			return nil, fmt.Errorf("open db: %w", err)
 		}
-		storage = postgres.New(db)
+		storage = postgres.New(db, "/migrations")
+
+		logger.Info("init provider")
+		provider, err := goose.NewProvider(database.DialectPostgres, db, migrations.Embed)
+		if err != nil {
+			return nil, fmt.Errorf("goose: create new provider: %w", err)
+		}
+
+		logger.Info("up migrations")
+		if _, err := provider.Up(ctx); err != nil {
+			return nil, fmt.Errorf("goose: provider up: %w", err)
+		}
 	case cfg.restore:
 		storage, err = local.NewRestore(&local.StorageOptions{
 			FileName: cfg.filePath,
 			Interval: cfg.storeInterval,
 			Logger:   logger,
 		})
+		if err != nil {
+			return nil, fmt.Errorf("creating restore: %w", err)
+		}
 	default:
 		storage, err = local.NewRepository(&local.StorageOptions{
 			FileName: cfg.filePath,
 			Interval: cfg.storeInterval,
 			Logger:   logger,
 		})
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("creating storage: %w", err)
+		if err != nil {
+			return nil, fmt.Errorf("creating default storage: %w", err)
+		}
 	}
 
 	return storage, nil

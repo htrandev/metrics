@@ -5,8 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/htrandev/metrics/internal/model"
 	"github.com/stretchr/testify/require"
+
+	"github.com/htrandev/metrics/internal/model"
 )
 
 var (
