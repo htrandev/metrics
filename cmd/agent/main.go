@@ -69,10 +69,8 @@ func run() error {
 
 		if send {
 			zl.Info("send metrics")
-			for _, metric := range metrics {
-				if err := agent.SendMetric(ctx, metric); err != nil {
-					zl.Error("can't send metric", zap.Any("metric", metric), zap.Error(err))
-				}
+			if err := agent.SendManyMetrics(ctx, metrics); err != nil {
+				zl.Error("can't send many metric", zap.Error(err))
 			}
 		}
 	}

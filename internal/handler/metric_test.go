@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/mailru/easyjson"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -19,15 +20,17 @@ import (
 )
 
 var (
-	errStore  = errors.New("store error")
-	errGet    = errors.New("get error")
-	errGetAll = errors.New("getAll error")
-	errPing   = errors.New("ping error")
+	errStore     = errors.New("store error")
+	errStoreMany = errors.New("store many error")
+	errGet       = errors.New("get error")
+	errGetAll    = errors.New("getAll error")
+	errPing      = errors.New("ping error")
 )
 
 type mockService struct {
-	storeErr bool
-	pingErr  bool
+	storeErr     bool
+	storeManyErr bool
+	pingErr      bool
 
 	notFound bool
 	getErr   bool
@@ -42,6 +45,13 @@ var _ Service = (*mockService)(nil)
 func (m *mockService) Store(context.Context, *model.Metric) error {
 	if m.storeErr {
 		return errStore
+	}
+	return nil
+}
+
+func (m *mockService) StoreMany(context.Context, []model.Metric) error {
+	if m.storeManyErr {
+		return errStoreMany
 	}
 	return nil
 }
@@ -376,6 +386,100 @@ func TestUpdateJSON(t *testing.T) {
 				tc.service,
 			)
 			handler := http.HandlerFunc(h.UpdateJSON)
+			srv := httptest.NewServer(handler)
+			defer srv.Close()
+
+			req := resty.New().R()
+			req.Method = http.MethodPost
+			req.URL = srv.URL
+			req.Body = tc.body
+
+			resp, err := req.Send()
+			assert.NoError(t, err, "error making HTTP request")
+
+			require.EqualValues(t, tc.expectedCode, resp.StatusCode())
+		})
+	}
+}
+
+func TestUpdateManyJSON(t *testing.T) {
+	log := zap.NewNop()
+
+	var (
+		delta   int64              = 1
+		value   float64            = 0.1
+		metrics model.MetricsSlice = model.MetricsSlice{
+			{
+				ID:    "gauge",
+				MType: "gauge",
+				Value: &value,
+			},
+			{
+				ID:    "counter",
+				MType: "counter",
+				Delta: &delta,
+			},
+		}
+	)
+
+	testCases := []struct {
+		name         string
+		service      *mockService
+		method       string
+		expectedCode int
+		body         io.Reader
+	}{
+		{
+			name:         "valid",
+			service:      &mockService{},
+			method:       http.MethodPost,
+			expectedCode: http.StatusOK,
+			body: func() io.Reader {
+				b, err := easyjson.Marshal(metrics)
+				require.NoError(t, err)
+
+				return bytes.NewBuffer(b)
+			}(),
+		},
+		{
+			name:         "invalid body",
+			service:      &mockService{},
+			method:       http.MethodPost,
+			expectedCode: http.StatusBadRequest,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(``))
+			}(),
+		},
+		{
+			name:         "empty metrics",
+			service:      &mockService{},
+			method:       http.MethodPost,
+			expectedCode: http.StatusOK,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`[]`))
+			}(),
+		},
+		{
+			name:         "store error",
+			service:      &mockService{storeManyErr: true},
+			method:       http.MethodPost,
+			expectedCode: http.StatusInternalServerError,
+			body: func() io.Reader {
+				b, err := easyjson.Marshal(metrics)
+				require.NoError(t, err)
+
+				return bytes.NewBuffer(b)
+			}(),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := NewMetricsHandler(
+				log,
+				tc.service,
+			)
+			handler := http.HandlerFunc(h.UpdateManyJSON)
 			srv := httptest.NewServer(handler)
 			defer srv.Close()
 

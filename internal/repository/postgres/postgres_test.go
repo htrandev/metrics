@@ -285,3 +285,53 @@ func TestGetAll(t *testing.T) {
 		})
 	}
 }
+
+func TestStoreMany(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	storeManyGauge := "store many gauge"
+	storeManyCounter := "store many counter"
+
+	r := setupTesting(t)
+
+	testCases := []struct {
+		name            string
+		metrics         []model.Metric
+		expectedMetrics []model.Metric
+	}{
+		{
+			name:            "valid empty",
+			metrics:         nil,
+			expectedMetrics: []model.Metric{},
+		},
+		{
+			name: "valid not empty",
+			metrics: func() []model.Metric {
+				return []model.Metric{
+					model.Gauge(storeManyGauge, 0.1),
+					model.Counter(storeManyCounter, 1),
+					model.Gauge(storeManyGauge, 0.2),
+					model.Counter(storeManyCounter, 2),
+				}
+			}(),
+			expectedMetrics: []model.Metric{
+				model.Gauge(storeManyGauge, 0.2),
+				model.Counter(storeManyCounter, 3),
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if len(tc.metrics) > 0 {
+				err := r.StoreMany(ctx, tc.metrics)
+				require.NoError(t, err)
+			}
+
+			m, err := r.GetAll(ctx)
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedMetrics, m)
+		})
+	}
+}

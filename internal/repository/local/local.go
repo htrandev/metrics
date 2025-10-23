@@ -89,7 +89,7 @@ func (m *MemStorage) Ping(ctx context.Context) error {
 // Если метрика уже существует, то ничего не делает.
 func (m *MemStorage) Set(Ctx context.Context, request *model.Metric) error {
 	if request == nil {
-		log.Println("repository: request is nil")
+		log.Println("repository/set: request is nil")
 		return nil
 	}
 
@@ -107,7 +107,7 @@ func (m *MemStorage) Set(Ctx context.Context, request *model.Metric) error {
 // Если метрика существует, то обновляет ее значение.
 func (m *MemStorage) Store(ctx context.Context, request *model.Metric) error {
 	if request == nil {
-		log.Println("repository: request is nil")
+		log.Println("repository/store: request is nil")
 		return nil
 	}
 
@@ -131,6 +131,21 @@ func (m *MemStorage) Store(ctx context.Context, request *model.Metric) error {
 	return nil
 }
 
+// StoreMany записывает новое значение метрикс.
+// Если метрика существует, то обновляет ее значение.
+func (m *MemStorage) StoreMany(ctx context.Context, metrics []model.Metric) error {
+	if len(metrics) == 0 {
+		log.Println("repository/storeMany: request is nil")
+		return nil
+	}
+	for _, metric := range metrics {
+		if err := m.Store(ctx, &metric); err != nil {
+			return fmt.Errorf("repository/storeMany: store [%+v]: %w", metric, err)
+		}
+	}
+	return nil
+}
+
 // Get возвращает метрику по имени.
 func (m *MemStorage) Get(ctx context.Context, name string) (model.Metric, error) {
 	m.mu.RLock()
@@ -138,7 +153,7 @@ func (m *MemStorage) Get(ctx context.Context, name string) (model.Metric, error)
 
 	metric, ok := m.metrics[name]
 	if !ok {
-		return model.Metric{}, fmt.Errorf("metric with name [%s]: %w", name, repository.ErrNotFound)
+		return model.Metric{}, fmt.Errorf("repository/get: metric with name [%s]: %w", name, repository.ErrNotFound)
 	}
 	return metric, nil
 }

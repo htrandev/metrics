@@ -13,6 +13,7 @@ type Storage interface {
 	Get(ctx context.Context, name string) (model.Metric, error)
 	GetAll(ctx context.Context) ([]model.Metric, error)
 	Store(ctx context.Context, metric *model.Metric) error
+	StoreMany(ctx context.Context, metric []model.Metric) error
 	Ping(ctx context.Context) error
 }
 
@@ -63,6 +64,17 @@ func (s *MetricsService) Store(ctx context.Context, m *model.Metric) error {
 
 	if err := s.opts.Storage.Store(ctx, m); err != nil {
 		return fmt.Errorf("store metric: %w", err)
+	}
+	return nil
+}
+
+func (s *MetricsService) StoreMany(ctx context.Context, metrics []model.Metric) error {
+	if len(metrics) == 0 {
+		return nil
+	}
+
+	if err := s.opts.Storage.StoreMany(ctx, metrics); err != nil {
+		return fmt.Errorf("store many metrics: %w", err)
 	}
 	return nil
 }

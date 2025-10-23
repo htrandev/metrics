@@ -112,6 +112,68 @@ func TestStore(t *testing.T) {
 	}
 }
 
+func TestStoreMany(t *testing.T) {
+	emptyMemstorage, err := NewRepository(&StorageOptions{
+		FileName: tempLogFileName,
+		Logger:   zap.NewNop(),
+	})
+	require.NoError(t, err)
+
+	defer func() {
+		err := os.Remove(tempLogFileName)
+		require.NoError(t, err)
+	}()
+
+	testCases := []struct {
+		name          string
+		storage       *MemStorage
+		metrics       []model.Metric
+		wantErr       bool
+		expectedValue []model.Metric
+	}{
+		{
+			name: "valid",
+			metrics: []model.Metric{
+				model.Gauge("gauge", 0.1),
+				model.Gauge("gauge", 0.2),
+				model.Counter("counter", 1),
+				model.Counter("counter", 2),
+			},
+			storage: emptyMemstorage,
+			wantErr: false,
+			expectedValue: []model.Metric{
+				model.Counter("counter", 3),
+				model.Gauge("gauge", 0.2),
+			},
+		},
+		{
+			name:          "nil",
+			metrics:       nil,
+			storage:       emptyMemstorage,
+			wantErr:       false,
+			expectedValue: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.storage.StoreMany(context.Background(), tc.metrics)
+			if tc.wantErr {
+				require.Error(t, err)
+				return
+			}
+
+			if len(tc.expectedValue) > 0 {
+
+				res, err := tc.storage.GetAll(context.Background())
+				require.NoError(t, err)
+
+				require.Equal(t, tc.expectedValue, res)
+			}
+		})
+	}
+}
+
 func TestGet(t *testing.T) {
 	emptyMemstorage, err := NewRepository(&StorageOptions{
 		FileName: tempLogFileName,

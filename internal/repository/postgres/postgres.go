@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/htrandev/metrics/internal/model"
+	"github.com/htrandev/metrics/internal/repository"
 )
 
 type PostgresRepository struct {
@@ -52,6 +53,9 @@ func (r *PostgresRepository) Get(ctx context.Context, name string) (model.Metric
 	)
 
 	if err := row.Scan(&t, &gauge, &counter); err != nil {
+		if err == sql.ErrNoRows {
+			return model.Metric{}, repository.ErrNotFound
+		}
 		return model.Metric{}, fmt.Errorf("repository/get: scan: %w", err)
 	}
 
@@ -114,6 +118,43 @@ func (r *PostgresRepository) Store(ctx context.Context, metric *model.Metric) er
 		return fmt.Errorf("repository/store: exec query: %w", err)
 	}
 	return nil
+}
+
+func (r *PostgresRepository) StoreMany(ctx context.Context, metrics []model.Metric) error {
+	if len(metrics) == 0 {
+		return nil
+	}
+
+	query := `INSERT INTO metrics (name, type, gauge, counter) 
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (name, type)
+		DO UPDATE SET 
+			gauge = $3, 
+			counter = metrics.counter + $4
+	;`
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("repository/storeMany: begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.PrepareContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("repository/storeMany: prepare query: %w", err)
+	}
+
+	for _, metric := range metrics {
+		_, err := stmt.ExecContext(ctx, metric.Name,
+			metric.Value.Type,
+			metric.Value.Gauge,
+			metric.Value.Counter)
+		if err != nil {
+			return fmt.Errorf("repository/storeMany: exec stmt: %w", err)
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (r *PostgresRepository) Set(ctx context.Context, metric *model.Metric) error {
