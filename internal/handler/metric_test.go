@@ -406,9 +406,9 @@ func TestUpdateManyJSON(t *testing.T) {
 	log := zap.NewNop()
 
 	var (
-		delta   int64              = 1
-		value   float64            = 0.1
-		metrics model.MetricsSlice = model.MetricsSlice{
+		delta   int64 = 1
+		value         = 0.1
+		metrics       = model.MetricsSlice{
 			{
 				ID:    "gauge",
 				MType: "gauge",
