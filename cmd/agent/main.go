@@ -46,7 +46,7 @@ func run() error {
 	zl.Info("init resty client")
 
 	zl.Info("init agent")
-	agent := agent.New(conf.addr)
+	agent := agent.New(conf.addr, conf.maxRetry, zl)
 
 	zl.Info("init collection")
 	collection := model.NewCollection()
@@ -68,8 +68,8 @@ func run() error {
 		metrics := collection.Collect()
 
 		if send {
-			zl.Info("send metrics")
-			if err := agent.SendManyMetrics(ctx, metrics); err != nil {
+			zl.Info("send metrics with retry")
+			if err := agent.SendManyWithRetry(ctx, metrics); err != nil {
 				zl.Error("can't send many metric", zap.Error(err))
 			}
 		}

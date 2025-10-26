@@ -21,6 +21,8 @@ func setupTesting(t *testing.T) *PostgresRepository {
 
 	const (
 		dsn = "postgres://postgres:postgres@postgres:5432/praktikum"
+
+		defaultMaxRetry = 3
 	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -35,7 +37,7 @@ func setupTesting(t *testing.T) *PostgresRepository {
 	_, err = provider.Up(ctx)
 	require.NoError(t, err)
 
-	r := New(db)
+	r := New(db, defaultMaxRetry)
 
 	t.Cleanup(func() {
 		r.Truncate(context.Background())

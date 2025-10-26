@@ -15,6 +15,7 @@ type flags struct {
 	filePath      string
 	restore       bool
 	databaseDsn   string
+	maxRetry      int
 }
 
 func parseFlags() (flags, error) {
@@ -27,6 +28,7 @@ func parseFlags() (flags, error) {
 	flag.StringVar(&f.filePath, "f", "metrics.log", "path to file to write metrics")
 	flag.BoolVar(&f.restore, "r", false, "restore previous metrics")
 	flag.StringVar(&f.databaseDsn, "d", "", "db dsn")
+	flag.IntVar(&f.maxRetry, "maxRetry", 3, "pg max retry")
 
 	flag.Parse()
 
@@ -63,5 +65,12 @@ func parseFlags() (flags, error) {
 		f.databaseDsn = dsn
 	}
 
+	if maxRetry := os.Getenv("MAX_RETRY"); maxRetry != "" {
+		v, err := strconv.Atoi(maxRetry)
+		if err != nil {
+			return f, fmt.Errorf("parse max retry: %w", err)
+		}
+		f.maxRetry = v
+	}
 	return f, nil
 }

@@ -3,19 +3,29 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"time"
+
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/htrandev/metrics/internal/model"
 	"github.com/htrandev/metrics/internal/repository"
 )
 
 type PostgresRepository struct {
-	db *sql.DB
+	db       *sql.DB
+	maxRetry int
 }
 
-func New(db *sql.DB) *PostgresRepository {
+func New(db *sql.DB, maxRetry int) *PostgresRepository {
+	if maxRetry == 0 {
+		maxRetry = 3
+	}
 	return &PostgresRepository{
-		db: db,
+		db:       db,
+		maxRetry: maxRetry,
 	}
 }
 
@@ -144,17 +154,53 @@ func (r *PostgresRepository) StoreMany(ctx context.Context, metrics []model.Metr
 		return fmt.Errorf("repository/storeMany: prepare query: %w", err)
 	}
 
+	errs := make([]error, 0, len(metrics))
 	for _, metric := range metrics {
 		_, err := stmt.ExecContext(ctx, metric.Name,
 			metric.Value.Type,
 			metric.Value.Gauge,
 			metric.Value.Counter)
 		if err != nil {
-			return fmt.Errorf("repository/storeMany: exec stmt: %w", err)
+			err = fmt.Errorf("repository/storeMany: exec stmt: %w", err)
+			errs = append(errs, err)
 		}
 	}
 
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+
 	return tx.Commit()
+}
+
+func (r *PostgresRepository) StoreManyWithRetry(ctx context.Context, metrics []model.Metric) error {
+	err := r.StoreMany(ctx, metrics)
+	if err != nil {
+		if isPgConnErr(err) {
+			for i := 0; i < r.maxRetry; i++ {
+				delay := i*2 + 1
+				time.Sleep(time.Second * time.Duration(delay))
+				if err := r.StoreMany(ctx, metrics); err != nil {
+					if isPgConnErr(err) {
+						continue
+					}
+					return fmt.Errorf("repository/storeManyWithRetry: store many retry: %d: unretriable: %w", i+1, err)
+				}
+				return nil
+			}
+			return fmt.Errorf("repository/storeManyWithRetry: reach retry limits: %w", err)
+		}
+		return fmt.Errorf("repository/storeManyWithRetry: store many: unretriable: %w", err)
+	}
+	return nil
+}
+
+func isPgConnErr(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgerrcode.IsConnectionException(pgErr.Code) {
+		return true
+	}
+	return false
 }
 
 func (r *PostgresRepository) Set(ctx context.Context, metric *model.Metric) error {

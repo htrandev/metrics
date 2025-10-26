@@ -19,6 +19,7 @@ type Service interface {
 
 	Store(ctx context.Context, metric *model.Metric) error
 	StoreMany(ctx context.Context, metric []model.Metric) error
+	StoreManyWithRetry(ctx context.Context, metric []model.Metric) error
 
 	Ping(ctx context.Context) error
 }
@@ -206,8 +207,8 @@ func (h *MetricHandler) UpdateManyJSON(rw http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := h.service.StoreMany(ctx, m); err != nil {
-		h.logger.Error("store many", zap.Error(err), scope)
+	if err := h.service.StoreManyWithRetry(ctx, m); err != nil {
+		h.logger.Error("store many with retry", zap.Error(err), scope)
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}

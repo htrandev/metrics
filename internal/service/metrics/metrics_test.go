@@ -85,6 +85,13 @@ func (m *mockStorage) StoreMany(_ context.Context, _ []model.Metric) error {
 	return nil
 }
 
+func (m *mockStorage) StoreManyWithRetry(_ context.Context, _ []model.Metric) error {
+	if m.storeManyErr {
+		return errStoreMany
+	}
+	return nil
+}
+
 func TestGet(t *testing.T) {
 	ctx := context.Background()
 	testCases := []struct {

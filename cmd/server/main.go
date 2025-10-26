@@ -108,7 +108,7 @@ func newStorage(ctx context.Context, cfg flags, logger *zap.Logger) (model.Stora
 		if err != nil {
 			return nil, fmt.Errorf("open db: %w", err)
 		}
-		storage = postgres.New(db)
+		storage = postgres.New(db, cfg.maxRetry)
 
 		logger.Info("init provider")
 		provider, err := goose.NewProvider(database.DialectPostgres, db, migrations.Embed)
@@ -125,6 +125,7 @@ func newStorage(ctx context.Context, cfg flags, logger *zap.Logger) (model.Stora
 			FileName: cfg.filePath,
 			Interval: cfg.storeInterval,
 			Logger:   logger,
+			MaxRetry: cfg.maxRetry,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("creating restore: %w", err)

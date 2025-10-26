@@ -3,6 +3,7 @@ package local
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -21,6 +22,7 @@ type StorageOptions struct {
 	FileName string
 	Interval time.Duration
 	Logger   *zap.Logger
+	MaxRetry int
 }
 
 type MemStorage struct {
@@ -64,6 +66,9 @@ func new(flag int, opts *StorageOptions) (*MemStorage, error) {
 	f, err := os.OpenFile(opts.FileName, flag, 0664)
 	if err != nil {
 		return nil, fmt.Errorf("restore: open file: %w", err)
+	}
+	if opts.MaxRetry == 0 {
+		opts.MaxRetry = 3
 	}
 	storage := &MemStorage{
 		metrics: metrics,
@@ -131,17 +136,40 @@ func (m *MemStorage) Store(ctx context.Context, request *model.Metric) error {
 	return nil
 }
 
-// StoreMany записывает новое значение метрикс.
+// StoreMany записывает новое значение метрик.
 // Если метрика существует, то обновляет ее значение.
 func (m *MemStorage) StoreMany(ctx context.Context, metrics []model.Metric) error {
 	if len(metrics) == 0 {
 		log.Println("repository/storeMany: request is nil")
 		return nil
 	}
+	errs := make([]error, 0, len(metrics))
 	for _, metric := range metrics {
 		if err := m.Store(ctx, &metric); err != nil {
-			return fmt.Errorf("repository/storeMany: store [%+v]: %w", metric, err)
+			err = fmt.Errorf("repository/storeMany: store [%+v]: %w", metric, err)
+			errs = append(errs, err)
+			continue
 		}
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
+}
+
+// StoreManyWithRetry записывает новое значение метрик.
+// Если метрика существует, то обновляет ее значение.
+// При ошибке пытается записать еще maxRetry раз
+func (m *MemStorage) StoreManyWithRetry(ctx context.Context, metrics []model.Metric) error {
+	err := m.StoreMany(ctx, metrics)
+	if err != nil {
+		for i := 0; i < m.opts.MaxRetry; i++ {
+			if err := m.StoreMany(ctx, metrics); err != nil {
+				continue
+			}
+			return nil
+		}
+		return fmt.Errorf("repository/storeManyWithRetry: reach retry limits: %w", err)
 	}
 	return nil
 }

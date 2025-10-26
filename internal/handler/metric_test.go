@@ -56,6 +56,13 @@ func (m *mockService) StoreMany(context.Context, []model.Metric) error {
 	return nil
 }
 
+func (m *mockService) StoreManyWithRetry(context.Context, []model.Metric) error {
+	if m.storeManyErr {
+		return errStoreMany
+	}
+	return nil
+}
+
 func (m *mockService) Get(context.Context, string) (model.Metric, error) {
 	if m.notFound {
 		return model.Metric{}, repository.ErrNotFound

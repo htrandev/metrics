@@ -13,6 +13,7 @@ type config struct {
 	reportInterval time.Duration
 	pollInterval   time.Duration
 	logLvl         string
+	maxRetry       int
 }
 
 func parseFlags() (*config, error) {
@@ -24,6 +25,7 @@ func parseFlags() (*config, error) {
 	flag.IntVar(&report, "r", 10, "report interval in seconds")
 	flag.IntVar(&poll, "p", 2, "poll interval in seconds")
 	flag.StringVar(&c.logLvl, "lvl", "debug", "log level")
+	flag.IntVar(&c.maxRetry, "maxRetry", 3, "max number of retries")
 
 	flag.Parse()
 
@@ -50,6 +52,14 @@ func parseFlags() (*config, error) {
 
 	if lvl := os.Getenv("LOG_LEVEL"); lvl != "" {
 		c.logLvl = lvl
+	}
+
+	if maxRetry := os.Getenv("MAX_RETRY"); maxRetry != "" {
+		v, err := strconv.Atoi(maxRetry)
+		if err != nil {
+			return nil, fmt.Errorf("parse max retry: %w", err)
+		}
+		c.maxRetry = v
 	}
 
 	return &c, nil

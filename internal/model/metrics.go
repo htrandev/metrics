@@ -12,6 +12,7 @@ type Storager interface {
 
 	Store(ctx context.Context, metric *Metric) error
 	StoreMany(ctx context.Context, metrics []Metric) error
+	StoreManyWithRetry(ctx context.Context, metrics []Metric) error
 
 	Set(ctx context.Context, metric *Metric) error
 
