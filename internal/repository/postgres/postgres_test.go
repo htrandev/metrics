@@ -337,3 +337,111 @@ func TestStoreMany(t *testing.T) {
 		})
 	}
 }
+
+func TestStoreManyWithRetry(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	storeManyWithRetryGauge := "store many with retry gauge"
+	storeManyWithRetryCounter := "store many with retry counter"
+
+	testCases := []struct {
+		name            string
+		metrics         []model.Metric
+		expectedMetrics []model.Metric
+		repository      *PostgresRepository
+		wantError       bool
+	}{
+		{
+			name:            "valid empty",
+			metrics:         nil,
+			expectedMetrics: []model.Metric{},
+			repository:      setupTesting(t),
+			wantError:       false,
+		},
+		{
+			name: "valid not empty",
+			metrics: func() []model.Metric {
+				return []model.Metric{
+					model.Gauge(storeManyWithRetryGauge, 0.1),
+					model.Counter(storeManyWithRetryCounter, 1),
+					model.Gauge(storeManyWithRetryGauge, 0.2),
+					model.Counter(storeManyWithRetryCounter, 2),
+				}
+			}(),
+			expectedMetrics: []model.Metric{
+				model.Gauge(storeManyWithRetryGauge, 0.2),
+				model.Counter(storeManyWithRetryCounter, 3),
+			},
+			repository: setupTesting(t),
+			wantError:  false,
+		},
+		{
+			name: "store err",
+			metrics: func() []model.Metric {
+				return []model.Metric{
+					model.Gauge(storeManyWithRetryGauge, 0.1),
+					model.Counter(storeManyWithRetryCounter, 1),
+					model.Gauge(storeManyWithRetryGauge, 0.2),
+					model.Counter(storeManyWithRetryCounter, 2),
+				}
+			}(),
+			expectedMetrics: []model.Metric{},
+			repository: func() *PostgresRepository {
+				r := setupTesting(t)
+				r.Close()
+				return r
+			}(),
+			wantError: true,
+		},
+		{
+			name: "conn error",
+			metrics: func() []model.Metric {
+				return []model.Metric{
+					model.Gauge(storeManyWithRetryGauge, 0.1),
+					model.Counter(storeManyWithRetryCounter, 1),
+					model.Gauge(storeManyWithRetryGauge, 0.2),
+					model.Counter(storeManyWithRetryCounter, 2),
+				}
+			}(),
+			expectedMetrics: []model.Metric{},
+			repository: func() *PostgresRepository {
+				t.Helper()
+
+				const (
+					dsn = "postgres://postgres:postgres@unknownhost:5432/praktikum"
+				)
+
+				db, err := sql.Open("pgx", dsn)
+				require.NoError(t, err)
+				db.Close()
+
+				r := New(db, 0)
+
+				t.Cleanup(func() {
+					r.Truncate(context.Background())
+					r.Close()
+				})
+				return r
+			}(),
+			wantError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if len(tc.metrics) > 0 {
+				err := tc.repository.StoreManyWithRetry(ctx, tc.metrics)
+				if tc.wantError {
+					require.Error(t, err)
+					return
+				}
+				require.NoError(t, err)
+			}
+
+			m, err := tc.repository.GetAll(ctx)
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedMetrics, m)
+		})
+	}
+}

@@ -11,21 +11,25 @@ import (
 )
 
 var (
-	errStore     = errors.New("store error")
-	errStoreMany = errors.New("store many error")
-	errGet       = errors.New("get error")
-	errGetAll    = errors.New("getAll error")
-	errPing      = errors.New("ping error")
+	errStore              = errors.New("store error")
+	errStoreMany          = errors.New("store many error")
+	errStoreManyWithRetry = errors.New("store many with retry error")
+
+	errGet    = errors.New("get error")
+	errGetAll = errors.New("getAll error")
+
+	errPing = errors.New("ping error")
 )
 
 var _ model.Storager = (*mockStorage)(nil)
 
 type mockStorage struct {
-	getErr       bool
-	getAllErr    bool
-	storeErr     bool
-	storeManyErr bool
-	pingErr      bool
+	getErr                bool
+	getAllErr             bool
+	storeErr              bool
+	storeManyErr          bool
+	storeManyWithRetryErr bool
+	pingErr               bool
 
 	gauge  bool
 	filled bool
@@ -86,8 +90,8 @@ func (m *mockStorage) StoreMany(_ context.Context, _ []model.Metric) error {
 }
 
 func (m *mockStorage) StoreManyWithRetry(_ context.Context, _ []model.Metric) error {
-	if m.storeManyErr {
-		return errStoreMany
+	if m.storeManyWithRetryErr {
+		return errStoreManyWithRetry
 	}
 	return nil
 }
@@ -279,6 +283,57 @@ func TestStoreMany(t *testing.T) {
 			s := NewService(&ServiseOptions{Storage: tc.storage})
 
 			err := s.StoreMany(ctx, tc.metrics)
+			if tc.wantErr {
+				require.Error(t, err)
+				require.ErrorIs(t, err, tc.expectedError)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestStoreManyWithRetry(t *testing.T) {
+	ctx := context.Background()
+	testCases := []struct {
+		name          string
+		storage       *mockStorage
+		metrics       []model.Metric
+		wantErr       bool
+		expectedError error
+	}{
+		{
+			name:    "valid",
+			storage: &mockStorage{},
+			metrics: []model.Metric{
+				model.Gauge("gauge", 0.1),
+				model.Counter("counter", 1),
+			},
+			wantErr: false,
+		},
+		{
+			name:    "invalid",
+			storage: &mockStorage{storeManyWithRetryErr: true},
+			metrics: []model.Metric{
+				model.Gauge("gauge", 0.1),
+				model.Counter("counter", 1),
+			},
+			wantErr:       true,
+			expectedError: errStoreManyWithRetry,
+		},
+		{
+			name:    "nil request",
+			storage: &mockStorage{},
+			metrics: nil,
+			wantErr: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewService(&ServiseOptions{Storage: tc.storage})
+
+			err := s.StoreManyWithRetry(ctx, tc.metrics)
 			if tc.wantErr {
 				require.Error(t, err)
 				require.ErrorIs(t, err, tc.expectedError)

@@ -113,6 +113,8 @@ func TestStore(t *testing.T) {
 }
 
 func TestStoreMany(t *testing.T) {
+	ctx := context.Background()
+
 	emptyMemstorage, err := NewRepository(&StorageOptions{
 		FileName: tempLogFileName,
 		Logger:   zap.NewNop(),
@@ -157,7 +159,7 @@ func TestStoreMany(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.storage.StoreMany(context.Background(), tc.metrics)
+			err := tc.storage.StoreMany(ctx, tc.metrics)
 			if tc.wantErr {
 				require.Error(t, err)
 				return
@@ -165,7 +167,7 @@ func TestStoreMany(t *testing.T) {
 
 			if len(tc.expectedValue) > 0 {
 
-				res, err := tc.storage.GetAll(context.Background())
+				res, err := tc.storage.GetAll(ctx)
 				require.NoError(t, err)
 
 				require.Equal(t, tc.expectedValue, res)
