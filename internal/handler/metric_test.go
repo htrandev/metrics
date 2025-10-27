@@ -566,7 +566,7 @@ func TestGetJSON(t *testing.T) {
 			name:         "empty name",
 			service:      &mockService{gauge: false},
 			method:       http.MethodPost,
-			expectedCode: http.StatusNotFound,
+			expectedCode: http.StatusBadRequest,
 			body: func() io.Reader {
 				return bytes.NewBuffer([]byte(`{"id":"","type":"counter"}`))
 			}(),
