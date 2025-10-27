@@ -10,24 +10,31 @@ import (
 	"testing"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/mailru/easyjson"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 
 	"github.com/htrandev/metrics/internal/model"
-	"github.com/htrandev/metrics/pkg/logger"
+	"github.com/htrandev/metrics/internal/repository"
 )
 
 var (
-	errStore  = errors.New("store error")
-	errGet    = errors.New("get error")
-	errGetAll = errors.New("getAll error")
+	errStore     = errors.New("store error")
+	errStoreMany = errors.New("store many error")
+	errGet       = errors.New("get error")
+	errGetAll    = errors.New("getAll error")
+	errPing      = errors.New("ping error")
 )
 
 type mockService struct {
-	storeErr bool
+	storeErr     bool
+	storeManyErr bool
+	pingErr      bool
 
-	getErr bool
-	gauge  bool
+	notFound bool
+	getErr   bool
+	gauge    bool
 
 	getAll bool
 	filled bool
@@ -42,7 +49,24 @@ func (m *mockService) Store(context.Context, *model.Metric) error {
 	return nil
 }
 
+func (m *mockService) StoreMany(context.Context, []model.Metric) error {
+	if m.storeManyErr {
+		return errStoreMany
+	}
+	return nil
+}
+
+func (m *mockService) StoreManyWithRetry(context.Context, []model.Metric) error {
+	if m.storeManyErr {
+		return errStoreMany
+	}
+	return nil
+}
+
 func (m *mockService) Get(context.Context, string) (model.Metric, error) {
+	if m.notFound {
+		return model.Metric{}, repository.ErrNotFound
+	}
 	if m.getErr {
 		return model.Metric{}, errGet
 	}
@@ -69,9 +93,15 @@ func (m *mockService) GetAll(context.Context) ([]model.Metric, error) {
 	return nil, nil
 }
 
+func (m *mockService) Ping(context.Context) error {
+	if m.pingErr {
+		return errPing
+	}
+	return nil
+}
+
 func TestUpdateHandler(t *testing.T) {
-	log, err := logger.NewZapLogger("debug")
-	require.NoError(t, err)
+	log := zap.NewNop()
 
 	testCases := []struct {
 		name         string
@@ -126,8 +156,6 @@ func TestUpdateHandler(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
-				nil,
-				0,
 			)
 
 			mux := http.NewServeMux()
@@ -143,8 +171,7 @@ func TestUpdateHandler(t *testing.T) {
 }
 
 func TestGetHandler(t *testing.T) {
-	log, err := logger.NewZapLogger("debug")
-	require.NoError(t, err)
+	log := zap.NewNop()
 
 	testCases := []struct {
 		name             string
@@ -187,6 +214,14 @@ func TestGetHandler(t *testing.T) {
 			method:       http.MethodGet,
 			url:          "/value/counter/test",
 			wantErr:      true,
+			expectedCode: http.StatusInternalServerError,
+		},
+		{
+			name:         "not found",
+			service:      &mockService{notFound: true},
+			method:       http.MethodGet,
+			url:          "/value/counter/test",
+			wantErr:      true,
 			expectedCode: http.StatusNotFound,
 		},
 	}
@@ -199,8 +234,6 @@ func TestGetHandler(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
-				nil,
-				0,
 			)
 
 			mux := http.NewServeMux()
@@ -220,8 +253,7 @@ func TestGetHandler(t *testing.T) {
 }
 
 func TestGetAll(t *testing.T) {
-	log, err := logger.NewZapLogger("debug")
-	require.NoError(t, err)
+	log := zap.NewNop()
 
 	testCases := []struct {
 		name             string
@@ -261,8 +293,6 @@ func TestGetAll(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
-				nil,
-				0,
 			)
 			handler := http.HandlerFunc(h.GetAll)
 			srv := httptest.NewServer(handler)
@@ -281,9 +311,8 @@ func TestGetAll(t *testing.T) {
 	}
 }
 
-func TestUpdateViaBody(t *testing.T) {
-	log, err := logger.NewZapLogger("debug")
-	require.NoError(t, err)
+func TestUpdateJSON(t *testing.T) {
+	log := zap.NewNop()
 
 	testCases := []struct {
 		name         string
@@ -362,8 +391,6 @@ func TestUpdateViaBody(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
-				nil,
-				0,
 			)
 			handler := http.HandlerFunc(h.UpdateJSON)
 			srv := httptest.NewServer(handler)
@@ -382,9 +409,102 @@ func TestUpdateViaBody(t *testing.T) {
 	}
 }
 
-func TestGetViaBody(t *testing.T) {
-	log, err := logger.NewZapLogger("debug")
-	require.NoError(t, err)
+func TestUpdateManyJSON(t *testing.T) {
+	log := zap.NewNop()
+
+	var (
+		delta   int64 = 1
+		value         = 0.1
+		metrics       = model.MetricsSlice{
+			{
+				ID:    "gauge",
+				MType: "gauge",
+				Value: &value,
+			},
+			{
+				ID:    "counter",
+				MType: "counter",
+				Delta: &delta,
+			},
+		}
+	)
+
+	testCases := []struct {
+		name         string
+		service      *mockService
+		method       string
+		expectedCode int
+		body         io.Reader
+	}{
+		{
+			name:         "valid",
+			service:      &mockService{},
+			method:       http.MethodPost,
+			expectedCode: http.StatusOK,
+			body: func() io.Reader {
+				b, err := easyjson.Marshal(metrics)
+				require.NoError(t, err)
+
+				return bytes.NewBuffer(b)
+			}(),
+		},
+		{
+			name:         "invalid body",
+			service:      &mockService{},
+			method:       http.MethodPost,
+			expectedCode: http.StatusBadRequest,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(``))
+			}(),
+		},
+		{
+			name:         "empty metrics",
+			service:      &mockService{},
+			method:       http.MethodPost,
+			expectedCode: http.StatusOK,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`[]`))
+			}(),
+		},
+		{
+			name:         "store error",
+			service:      &mockService{storeManyErr: true},
+			method:       http.MethodPost,
+			expectedCode: http.StatusInternalServerError,
+			body: func() io.Reader {
+				b, err := easyjson.Marshal(metrics)
+				require.NoError(t, err)
+
+				return bytes.NewBuffer(b)
+			}(),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := NewMetricsHandler(
+				log,
+				tc.service,
+			)
+			handler := http.HandlerFunc(h.UpdateManyJSON)
+			srv := httptest.NewServer(handler)
+			defer srv.Close()
+
+			req := resty.New().R()
+			req.Method = http.MethodPost
+			req.URL = srv.URL
+			req.Body = tc.body
+
+			resp, err := req.Send()
+			assert.NoError(t, err, "error making HTTP request")
+
+			require.EqualValues(t, tc.expectedCode, resp.StatusCode())
+		})
+	}
+}
+
+func TestGetJSON(t *testing.T) {
+	log := zap.NewNop()
 
 	testCases := []struct {
 		name         string
@@ -446,7 +566,7 @@ func TestGetViaBody(t *testing.T) {
 			name:         "empty name",
 			service:      &mockService{gauge: false},
 			method:       http.MethodPost,
-			expectedCode: http.StatusNotFound,
+			expectedCode: http.StatusBadRequest,
 			body: func() io.Reader {
 				return bytes.NewBuffer([]byte(`{"id":"","type":"counter"}`))
 			}(),
@@ -457,6 +577,18 @@ func TestGetViaBody(t *testing.T) {
 		{
 			name:         "get error",
 			service:      &mockService{getErr: true},
+			method:       http.MethodPost,
+			expectedCode: http.StatusInternalServerError,
+			body: func() io.Reader {
+				return bytes.NewBuffer([]byte(`{"id":"test","type":"counter"}`))
+			}(),
+			expectedBody: func() string {
+				return ``
+			}(),
+		},
+		{
+			name:         "not found",
+			service:      &mockService{notFound: true},
 			method:       http.MethodPost,
 			expectedCode: http.StatusNotFound,
 			body: func() io.Reader {
@@ -473,8 +605,6 @@ func TestGetViaBody(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
-				nil,
-				0,
 			)
 			handler := http.HandlerFunc(h.GetJSON)
 			srv := httptest.NewServer(handler)
@@ -492,6 +622,49 @@ func TestGetViaBody(t *testing.T) {
 			require.EqualValues(t, tc.expectedBody, string(resp.Body()))
 		})
 	}
+}
+
+func TestPing(t *testing.T) {
+	log := zap.NewNop()
+
+	testCases := []struct {
+		name         string
+		service      *mockService
+		expectedCode int
+	}{
+		{
+			name:         "valid",
+			service:      &mockService{},
+			expectedCode: http.StatusOK,
+		},
+		{
+			name:         "invalid",
+			service:      &mockService{pingErr: true},
+			expectedCode: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := NewMetricsHandler(
+				log,
+				tc.service,
+			)
+			handler := http.HandlerFunc(h.Ping)
+			srv := httptest.NewServer(handler)
+			defer srv.Close()
+
+			req := resty.New().R()
+			req.Method = http.MethodGet
+			req.URL = srv.URL
+
+			resp, err := req.Send()
+			assert.NoError(t, err, "error making HTTP request")
+
+			require.EqualValues(t, tc.expectedCode, resp.StatusCode())
+		})
+	}
+
 }
 
 func filledStorage() []model.Metric {

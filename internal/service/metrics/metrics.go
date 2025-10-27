@@ -4,27 +4,48 @@ import (
 	"context"
 	"fmt"
 
+	"go.uber.org/zap"
+
 	"github.com/htrandev/metrics/internal/model"
 )
 
 type Storage interface {
 	Get(ctx context.Context, name string) (model.Metric, error)
 	GetAll(ctx context.Context) ([]model.Metric, error)
+
 	Store(ctx context.Context, metric *model.Metric) error
+	StoreMany(ctx context.Context, metric []model.Metric) error
+	StoreManyWithRetry(ctx context.Context, metric []model.Metric) error
+
+	Ping(ctx context.Context) error
+}
+
+type FileStorage interface {
+	Flush(context.Context, []model.Metric) error
+}
+
+type ServiseOptions struct {
+	Logger *zap.Logger
+
+	Storage Storage
 }
 
 type MetricsService struct {
-	storage Storage
+	opts *ServiseOptions
 }
 
-func NewService(s Storage) *MetricsService {
+func NewService(opts *ServiseOptions) *MetricsService {
 	return &MetricsService{
-		storage: s,
+		opts: opts,
 	}
 }
 
+func (s *MetricsService) Ping(ctx context.Context) error {
+	return s.opts.Storage.Ping(ctx)
+}
+
 func (s *MetricsService) Get(ctx context.Context, name string) (model.Metric, error) {
-	m, err := s.storage.Get(ctx, name)
+	m, err := s.opts.Storage.Get(ctx, name)
 	if err != nil {
 		return model.Metric{}, fmt.Errorf("get metric: %w", err)
 	}
@@ -32,7 +53,7 @@ func (s *MetricsService) Get(ctx context.Context, name string) (model.Metric, er
 }
 
 func (s *MetricsService) GetAll(ctx context.Context) ([]model.Metric, error) {
-	m, err := s.storage.GetAll(ctx)
+	m, err := s.opts.Storage.GetAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get all metrics: %w", err)
 	}
@@ -44,8 +65,30 @@ func (s *MetricsService) Store(ctx context.Context, m *model.Metric) error {
 		return nil
 	}
 
-	if err := s.storage.Store(ctx, m); err != nil {
-		return fmt.Errorf("get all metrics: %w", err)
+	if err := s.opts.Storage.Store(ctx, m); err != nil {
+		return fmt.Errorf("store metric: %w", err)
+	}
+	return nil
+}
+
+func (s *MetricsService) StoreMany(ctx context.Context, metrics []model.Metric) error {
+	if len(metrics) == 0 {
+		return nil
+	}
+
+	if err := s.opts.Storage.StoreMany(ctx, metrics); err != nil {
+		return fmt.Errorf("store many metrics: %w", err)
+	}
+	return nil
+}
+
+func (s *MetricsService) StoreManyWithRetry(ctx context.Context, metrics []model.Metric) error {
+	if len(metrics) == 0 {
+		return nil
+	}
+
+	if err := s.opts.Storage.StoreManyWithRetry(ctx, metrics); err != nil {
+		return fmt.Errorf("store many with retry metrics: %w", err)
 	}
 	return nil
 }

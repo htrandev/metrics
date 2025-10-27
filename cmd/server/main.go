@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,13 +11,20 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pressly/goose/v3"
+	"github.com/pressly/goose/v3/database"
+	"go.uber.org/zap"
+
 	"github.com/htrandev/metrics/internal/handler"
-	"github.com/htrandev/metrics/internal/repository/file"
-	"github.com/htrandev/metrics/internal/repository/memstorage"
+	"github.com/htrandev/metrics/internal/model"
+	"github.com/htrandev/metrics/internal/repository/local"
+	"github.com/htrandev/metrics/internal/repository/postgres"
 	"github.com/htrandev/metrics/internal/router"
 	"github.com/htrandev/metrics/internal/service/metrics"
-	"github.com/htrandev/metrics/internal/service/restore"
+	"github.com/htrandev/metrics/migrations"
 	"github.com/htrandev/metrics/pkg/logger"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func main() {
@@ -42,46 +50,21 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	zl.Info("init mem storage")
-	memStorageRepository := memstorage.NewRepository()
-
-	zl.Info("init file storage")
-	fileRepository, err := file.NewRepository(flags.filePath)
+	zl.Info("init storage")
+	storage, err := newStorage(ctx, flags, zl)
 	if err != nil {
-		return fmt.Errorf("init file repository: %w", err)
+		return fmt.Errorf("init storage: %w", err)
 	}
-	defer func() { _ = fileRepository.Close() }()
+	defer storage.Close()
 
 	zl.Info("init metric service")
-	metricService := metrics.NewService(memStorageRepository)
+	metricService := metrics.NewService(&metrics.ServiseOptions{
+		Logger:  zl,
+		Storage: storage,
+	})
 
 	zl.Info("init handler")
-	metricHandler := handler.NewMetricsHandler(
-		zl,
-		metricService,
-		fileRepository,
-		flags.storeInterval,
-	)
-
-	zl.Info("run flusher")
-	go metricHandler.Run(ctx)
-
-	if flags.restore {
-		zl.Info("restore previous metrics")
-		restoreService, err := restore.NewService(flags.filePath, memStorageRepository, zl)
-		if err != nil {
-			return fmt.Errorf("init restore service: %w", err)
-		}
-		defer func() { _ = restoreService.Close() }()
-
-		restoreCtx, restoreCancel := context.WithTimeout(ctx, 1*time.Minute)
-		defer restoreCancel()
-
-		if err := restoreService.Restore(restoreCtx); err != nil {
-			return fmt.Errorf("can't restore metrics ferom file: %w", err)
-		}
-
-	}
+	metricHandler := handler.NewMetricsHandler(zl, metricService)
 
 	zl.Info("init router")
 	router, err := router.New(zl, metricHandler)
@@ -113,4 +96,50 @@ func run() error {
 		return fmt.Errorf("shutdown server: %w", err)
 	}
 	return nil
+}
+
+func newStorage(ctx context.Context, cfg flags, logger *zap.Logger) (model.Storager, error) {
+	var storage model.Storager
+	var err error
+
+	switch {
+	case cfg.databaseDsn != "":
+		db, err := sql.Open("pgx", cfg.databaseDsn)
+		if err != nil {
+			return nil, fmt.Errorf("open db: %w", err)
+		}
+		storage = postgres.New(db, cfg.maxRetry)
+
+		logger.Info("init provider")
+		provider, err := goose.NewProvider(database.DialectPostgres, db, migrations.Embed)
+		if err != nil {
+			return nil, fmt.Errorf("goose: create new provider: %w", err)
+		}
+
+		logger.Info("up migrations")
+		if _, err := provider.Up(ctx); err != nil {
+			return nil, fmt.Errorf("goose: provider up: %w", err)
+		}
+	case cfg.restore:
+		storage, err = local.NewRestore(&local.StorageOptions{
+			FileName: cfg.filePath,
+			Interval: cfg.storeInterval,
+			Logger:   logger,
+			MaxRetry: cfg.maxRetry,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("creating restore: %w", err)
+		}
+	default:
+		storage, err = local.NewRepository(&local.StorageOptions{
+			FileName: cfg.filePath,
+			Interval: cfg.storeInterval,
+			Logger:   logger,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("creating default storage: %w", err)
+		}
+	}
+
+	return storage, nil
 }

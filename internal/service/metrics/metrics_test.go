@@ -5,25 +5,47 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/htrandev/metrics/internal/model"
 	"github.com/stretchr/testify/require"
+
+	"github.com/htrandev/metrics/internal/model"
 )
 
 var (
-	errStore  = errors.New("store error")
+	errStore              = errors.New("store error")
+	errStoreMany          = errors.New("store many error")
+	errStoreManyWithRetry = errors.New("store many with retry error")
+
 	errGet    = errors.New("get error")
 	errGetAll = errors.New("getAll error")
+
+	errPing = errors.New("ping error")
 )
 
-var _ Storage = (*mockStorage)(nil)
+var _ model.Storager = (*mockStorage)(nil)
 
 type mockStorage struct {
-	getErr    bool
-	getAllErr bool
-	storeErr  bool
+	getErr                bool
+	getAllErr             bool
+	storeErr              bool
+	storeManyErr          bool
+	storeManyWithRetryErr bool
+	pingErr               bool
 
 	gauge  bool
 	filled bool
+}
+
+func (m *mockStorage) Ping(_ context.Context) error {
+	if m.pingErr {
+		return errPing
+	}
+	return nil
+}
+
+func (m *mockStorage) Close() error { return nil }
+
+func (m *mockStorage) Set(_ context.Context, _ *model.Metric) error {
+	return nil
 }
 
 func (m *mockStorage) Get(_ context.Context, _ string) (model.Metric, error) {
@@ -56,6 +78,20 @@ func (m *mockStorage) GetAll(_ context.Context) ([]model.Metric, error) {
 func (m *mockStorage) Store(_ context.Context, _ *model.Metric) error {
 	if m.storeErr {
 		return errStore
+	}
+	return nil
+}
+
+func (m *mockStorage) StoreMany(_ context.Context, _ []model.Metric) error {
+	if m.storeManyErr {
+		return errStoreMany
+	}
+	return nil
+}
+
+func (m *mockStorage) StoreManyWithRetry(_ context.Context, _ []model.Metric) error {
+	if m.storeManyWithRetryErr {
+		return errStoreManyWithRetry
 	}
 	return nil
 }
@@ -102,7 +138,7 @@ func TestGet(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := NewService(tc.storage)
+			s := NewService(&ServiseOptions{Storage: tc.storage})
 
 			m, err := s.Get(ctx, tc.metricName)
 			if tc.wantErr {
@@ -112,7 +148,6 @@ func TestGet(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tc.expectedMetric, m)
-
 		})
 	}
 }
@@ -148,7 +183,7 @@ func TestGetAll(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := NewService(tc.storage)
+			s := NewService(&ServiseOptions{Storage: tc.storage})
 
 			m, err := s.GetAll(ctx)
 			if tc.wantErr {
@@ -158,7 +193,6 @@ func TestGetAll(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tc.expectedMetric, m)
-
 		})
 	}
 }
@@ -195,7 +229,7 @@ func TestStore(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := NewService(tc.storage)
+			s := NewService(&ServiseOptions{Storage: tc.storage})
 
 			err := s.Store(ctx, tc.metric)
 			if tc.wantErr {
@@ -204,7 +238,144 @@ func TestStore(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
+		})
+	}
+}
 
+func TestStoreMany(t *testing.T) {
+	ctx := context.Background()
+	testCases := []struct {
+		name          string
+		storage       *mockStorage
+		metrics       []model.Metric
+		wantErr       bool
+		expectedError error
+	}{
+		{
+			name:    "valid",
+			storage: &mockStorage{},
+			metrics: []model.Metric{
+				model.Gauge("gauge", 0.1),
+				model.Counter("counter", 1),
+			},
+			wantErr: false,
+		},
+		{
+			name:    "invalid",
+			storage: &mockStorage{storeManyErr: true},
+			metrics: []model.Metric{
+				model.Gauge("gauge", 0.1),
+				model.Counter("counter", 1),
+			},
+			wantErr:       true,
+			expectedError: errStoreMany,
+		},
+		{
+			name:    "nil request",
+			storage: &mockStorage{},
+			metrics: nil,
+			wantErr: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewService(&ServiseOptions{Storage: tc.storage})
+
+			err := s.StoreMany(ctx, tc.metrics)
+			if tc.wantErr {
+				require.Error(t, err)
+				require.ErrorIs(t, err, tc.expectedError)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestStoreManyWithRetry(t *testing.T) {
+	ctx := context.Background()
+	testCases := []struct {
+		name          string
+		storage       *mockStorage
+		metrics       []model.Metric
+		wantErr       bool
+		expectedError error
+	}{
+		{
+			name:    "valid",
+			storage: &mockStorage{},
+			metrics: []model.Metric{
+				model.Gauge("gauge", 0.1),
+				model.Counter("counter", 1),
+			},
+			wantErr: false,
+		},
+		{
+			name:    "invalid",
+			storage: &mockStorage{storeManyWithRetryErr: true},
+			metrics: []model.Metric{
+				model.Gauge("gauge", 0.1),
+				model.Counter("counter", 1),
+			},
+			wantErr:       true,
+			expectedError: errStoreManyWithRetry,
+		},
+		{
+			name:    "nil request",
+			storage: &mockStorage{},
+			metrics: nil,
+			wantErr: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewService(&ServiseOptions{Storage: tc.storage})
+
+			err := s.StoreManyWithRetry(ctx, tc.metrics)
+			if tc.wantErr {
+				require.Error(t, err)
+				require.ErrorIs(t, err, tc.expectedError)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestPing(t *testing.T) {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name          string
+		storage       *mockStorage
+		wantErr       bool
+		expectedError error
+	}{
+		{
+			name:    "valid",
+			storage: &mockStorage{},
+			wantErr: false,
+		},
+		{
+			name:          "invalid",
+			storage:       &mockStorage{pingErr: true},
+			wantErr:       true,
+			expectedError: errPing,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewService(&ServiseOptions{Storage: tc.storage})
+			err := s.Ping(ctx)
+			if tc.wantErr {
+				require.Error(t, err)
+				require.ErrorIs(t, err, tc.expectedError)
+				return
+			}
+			require.NoError(t, err)
 		})
 	}
 }

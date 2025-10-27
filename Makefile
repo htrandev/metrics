@@ -15,3 +15,6 @@ test:
 
 cover:
 	@go tool cover -func=cover.out  
+
+migration.sql:
+	@goose -dir ./migrations create $(name) sql 
