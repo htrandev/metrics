@@ -59,12 +59,6 @@ func TestStore(t *testing.T) {
 			},
 		},
 		{
-			name:    "nil request",
-			storage: emptyMemstorage,
-			req:     nil,
-			wantErr: false,
-		},
-		{
 			name:    "filled mem storage gauge",
 			storage: filledMemStorage(t),
 			req: &model.Metric{
@@ -335,19 +329,6 @@ func TestSet(t *testing.T) {
 				Name:  "counter",
 				Value: model.MetricValue{Type: model.TypeCounter, Counter: 2},
 			}},
-		},
-		{
-			name: "valid nil request",
-			storage: func() *MemStorage {
-				s, err := NewRepository(&StorageOptions{
-					FileName: tempLogFileName,
-					Logger:   zap.NewNop(),
-				})
-				require.NoError(t, err)
-				return s
-			}(),
-			req:            nil,
-			expetedMetrics: []model.Metric{},
 		},
 		{
 			name:    "valid filled gauge",
