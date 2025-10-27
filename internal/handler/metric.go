@@ -231,7 +231,7 @@ func (h *MetricHandler) GetJSON(rw http.ResponseWriter, r *http.Request) {
 
 	if req.Name == "" {
 		h.logger.Error("got empty metric name", scope)
-		rw.WriteHeader(http.StatusNotFound)
+		rw.WriteHeader(http.StatusBadRequest)
 		return
 	}
 

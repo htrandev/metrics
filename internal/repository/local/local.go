@@ -93,11 +93,6 @@ func (m *MemStorage) Ping(ctx context.Context) error {
 // Set записывает значение метрики.
 // Если метрика уже существует, то ничего не делает.
 func (m *MemStorage) Set(Ctx context.Context, request *model.Metric) error {
-	if request == nil {
-		log.Println("repository/set: request is nil")
-		return nil
-	}
-
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -111,11 +106,6 @@ func (m *MemStorage) Set(Ctx context.Context, request *model.Metric) error {
 // Store записывает новое значение метрики.
 // Если метрика существует, то обновляет ее значение.
 func (m *MemStorage) Store(ctx context.Context, request *model.Metric) error {
-	if request == nil {
-		log.Println("repository/store: request is nil")
-		return nil
-	}
-
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
