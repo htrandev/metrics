@@ -8,10 +8,13 @@ import (
 
 	"github.com/htrandev/metrics/internal/handler"
 	"github.com/htrandev/metrics/internal/handler/middleware"
+	"github.com/htrandev/metrics/pkg/sign"
 )
 
-func New(logger *zap.Logger, handler *handler.MetricHandler) (*chi.Mux, error) {
+func New(key string, logger *zap.Logger, handler *handler.MetricHandler) (*chi.Mux, error) {
 	r := chi.NewRouter()
+
+	signature := sign.Signature(key)
 
 	r.With(
 		middleware.MethodChecker(http.MethodGet),
@@ -52,6 +55,7 @@ func New(logger *zap.Logger, handler *handler.MetricHandler) (*chi.Mux, error) {
 		middleware.Logger(logger),
 		middleware.ContentType(),
 		middleware.Compress(),
+		middleware.Sign(signature),
 	).Post("/updates/", handler.UpdateManyJSON)
 
 	return r, nil

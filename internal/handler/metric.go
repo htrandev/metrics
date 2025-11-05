@@ -11,6 +11,7 @@ import (
 
 	"github.com/htrandev/metrics/internal/model"
 	"github.com/htrandev/metrics/internal/repository"
+	"github.com/htrandev/metrics/pkg/sign"
 )
 
 type Service interface {
@@ -24,20 +25,36 @@ type Service interface {
 	Ping(ctx context.Context) error
 }
 
+type Signer interface {
+	Sign([]byte) []byte
+}
+
+type Cipher interface {
+	Encrypt([]byte) []byte
+}
+
 type MetricHandler struct {
 	service Service
 	logger  *zap.Logger
+	cipher  Cipher
+	signer  Signer
 }
 
 func NewMetricsHandler(
 	l *zap.Logger,
 	s Service,
+	// cipher Cipher,
+	key string,
 ) *MetricHandler {
 	return &MetricHandler{
 		logger:  l,
 		service: s,
+		// cipher:  cipher,
+		signer: sign.Signature(key),
 	}
 }
+
+// testtesttesttest
 
 func (h *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

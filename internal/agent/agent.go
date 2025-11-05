@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -11,33 +12,42 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/htrandev/metrics/internal/model"
+	"github.com/htrandev/metrics/pkg/sign"
 )
 
-type Agent struct {
-	client   *resty.Client
-	addr     string
-	maxRetry int
-
-	logger *zap.Logger
+var defaultOpts = &AgentOptions{
+	Addr:     "localhost:8080",
+	Key:      "",
+	MaxRetry: 3,
+	Logger:   zap.NewNop(),
 }
 
-func New(addr string, maxRetry int, l *zap.Logger) *Agent {
-	client := resty.New().
-		SetTimeout(30 * time.Second)
+type AgentOptions struct {
+	Addr     string
+	Key      string
+	MaxRetry int
 
-	if maxRetry <= 0 {
-		maxRetry = 3
-	}
-	if l == nil {
-		l = zap.NewNop()
+	Client *resty.Client
+	Logger *zap.Logger
+}
+
+type Agent struct {
+	opts *AgentOptions
+}
+
+func New(opts *AgentOptions) *Agent {
+	if opts == nil {
+		opts = defaultOpts
 	}
 
-	return &Agent{
-		client:   client,
-		addr:     addr,
-		maxRetry: maxRetry,
-		logger:   l,
+	if opts.MaxRetry <= 0 {
+		opts.MaxRetry = 3
 	}
+	if opts.Logger == nil {
+		opts.Logger = zap.NewNop()
+	}
+
+	return &Agent{opts: opts}
 }
 
 func (a *Agent) SendSingleMetric(ctx context.Context, metric model.Metric) error {
@@ -46,9 +56,9 @@ func (a *Agent) SendSingleMetric(ctx context.Context, metric model.Metric) error
 	if err != nil {
 		return fmt.Errorf("build body: %w", err)
 	}
-	url := buildSingleURL(a.addr)
+	url := buildSingleURL(a.opts.Addr)
 
-	_, err = a.client.R().
+	_, err = a.opts.Client.R().
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Content-Encoding", "gzip").
 		SetBody(body).
@@ -74,14 +84,22 @@ func (a *Agent) SendManyMetrics(ctx context.Context, metrics []model.Metric) err
 		return fmt.Errorf("build body: %w", err)
 	}
 
-	url := buildManyURL(a.addr)
+	url := buildManyURL(a.opts.Addr)
 
-	_, err = a.client.R().
+	r := a.opts.Client.R().
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Content-Encoding", "gzip").
 		SetBody(body).
-		SetContext(ctx).
-		Post(url)
+		SetContext(ctx)
+
+	if a.opts.Key != "" {
+		s := sign.Signature(a.opts.Key)
+		signature := s.Sign(body)
+		hash := base64.RawURLEncoding.EncodeToString(signature)
+		r.SetHeader("HashSHA256", hash)
+	}
+
+	_, err = r.Post(url)
 	if errors.Is(err, io.EOF) {
 		return nil
 	}
@@ -95,16 +113,16 @@ func (a *Agent) SendManyWithRetry(ctx context.Context, metrics []model.Metric) e
 	err := a.SendManyMetrics(ctx, metrics)
 
 	if err != nil {
-		a.logger.Error("send many metrics", zap.Error(err), zap.String("scope", "agent/sendWithRetry"))
-		a.logger.Info("try to resend metrics", zap.String("scope", "agent/sendWithRetry"))
+		a.opts.Logger.Error("send many metrics", zap.Error(err), zap.String("scope", "agent/sendWithRetry"))
+		a.opts.Logger.Info("try to resend metrics", zap.String("scope", "agent/sendWithRetry"))
 
-		for i := 0; i < a.maxRetry; i++ {
-			a.logger.Debug("", zap.Int("retry", i+1))
+		for i := 0; i < a.opts.MaxRetry; i++ {
+			a.opts.Logger.Debug("", zap.Int("retry", i+1))
 			retryDelay := i*2 + 1
 			time.Sleep(time.Second * time.Duration(retryDelay))
 			err := a.SendManyMetrics(ctx, metrics)
 			if err != nil {
-				a.logger.Error("send many metrics", zap.Int("retry", i+1), zap.Error(err), zap.String("scope", "agent/sendWithRetry"))
+				a.opts.Logger.Error("send many metrics", zap.Int("retry", i+1), zap.Error(err), zap.String("scope", "agent/sendWithRetry"))
 				continue
 			}
 			return nil

@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-resty/resty/v2"
 	"go.uber.org/zap"
 
 	"github.com/htrandev/metrics/internal/agent"
@@ -44,9 +45,17 @@ func run() error {
 	defer reportTicker.Stop()
 
 	zl.Info("init resty client")
+	client := resty.New().
+		SetTimeout(30 * time.Second)
 
 	zl.Info("init agent")
-	agent := agent.New(conf.addr, conf.maxRetry, zl)
+	agent := agent.New(&agent.AgentOptions{
+		Addr:     conf.addr,
+		Key:      conf.key,
+		MaxRetry: conf.maxRetry,
+		Logger:   zl,
+		Client:   client,
+	})
 
 	zl.Info("init collection")
 	collection := model.NewCollection()
@@ -72,6 +81,7 @@ func run() error {
 			if err := agent.SendManyWithRetry(ctx, metrics); err != nil {
 				zl.Error("can't send many metric", zap.Error(err))
 			}
+			zl.Info("successfully send metrics")
 		}
 	}
 }

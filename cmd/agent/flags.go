@@ -14,6 +14,7 @@ type config struct {
 	pollInterval   time.Duration
 	logLvl         string
 	maxRetry       int
+	key            string
 }
 
 func parseFlags() (*config, error) {
@@ -26,6 +27,7 @@ func parseFlags() (*config, error) {
 	flag.IntVar(&poll, "p", 2, "poll interval in seconds")
 	flag.StringVar(&c.logLvl, "lvl", "debug", "log level")
 	flag.IntVar(&c.maxRetry, "maxRetry", 3, "max number of retries")
+	flag.StringVar(&c.key, "k", "", "secret key")
 
 	flag.Parse()
 
@@ -60,6 +62,10 @@ func parseFlags() (*config, error) {
 			return nil, fmt.Errorf("parse max retry: %w", err)
 		}
 		c.maxRetry = v
+	}
+
+	if key := os.Getenv("KEY"); key != "" {
+		c.key = key
 	}
 
 	return &c, nil

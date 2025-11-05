@@ -16,6 +16,7 @@ type flags struct {
 	restore       bool
 	databaseDsn   string
 	maxRetry      int
+	key           string
 }
 
 func parseFlags() (flags, error) {
@@ -29,6 +30,7 @@ func parseFlags() (flags, error) {
 	flag.BoolVar(&f.restore, "r", false, "restore previous metrics")
 	flag.StringVar(&f.databaseDsn, "d", "", "db dsn")
 	flag.IntVar(&f.maxRetry, "maxRetry", 3, "pg max retry")
+	flag.StringVar(&f.key, "k", "", "secret key")
 
 	flag.Parse()
 
@@ -72,5 +74,10 @@ func parseFlags() (flags, error) {
 		}
 		f.maxRetry = v
 	}
+
+	if key := os.Getenv("KEY"); key != "" {
+		f.key = key
+	}
+
 	return f, nil
 }
