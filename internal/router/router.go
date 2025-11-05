@@ -50,7 +50,6 @@ func New(key string, logger *zap.Logger, handler *handler.MetricHandler) (*chi.M
 
 	r.With(
 		middleware.MethodChecker(http.MethodGet),
-		middleware.Sign(key),
 	).Get("/ping", handler.Ping)
 
 	r.With(

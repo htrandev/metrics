@@ -80,6 +80,7 @@ func run() error {
 			zl.Info("send metrics with retry")
 			if err := agent.SendManyWithRetry(ctx, metrics); err != nil {
 				zl.Error("can't send many metric", zap.Error(err))
+				continue
 			}
 			zl.Info("successfully send metrics")
 		}

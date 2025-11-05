@@ -11,7 +11,6 @@ import (
 
 	"github.com/htrandev/metrics/internal/model"
 	"github.com/htrandev/metrics/internal/repository"
-	"github.com/htrandev/metrics/pkg/sign"
 )
 
 type Service interface {
@@ -43,18 +42,13 @@ type MetricHandler struct {
 func NewMetricsHandler(
 	l *zap.Logger,
 	s Service,
-	// cipher Cipher,
 	key string,
 ) *MetricHandler {
 	return &MetricHandler{
 		logger:  l,
 		service: s,
-		// cipher:  cipher,
-		signer: sign.Signature(key),
 	}
 }
-
-// testtesttesttest
 
 func (h *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -268,7 +262,7 @@ func (h *MetricHandler) GetJSON(rw http.ResponseWriter, r *http.Request) {
 
 	body, err := easyjson.Marshal(response)
 	if err != nil {
-		h.logger.Error("get from storage", zap.Error(err), scope)
+		h.logger.Error("marshal response", zap.Error(err), scope)
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}

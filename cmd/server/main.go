@@ -63,12 +63,6 @@ func run() error {
 		Storage: storage,
 	})
 
-	zl.Info("init cipher")
-	// cipher, err := cipher.NewAESCipher(flags.key)
-	// if err != nil {
-	// 	return fmt.Errorf("init cipher: %w", err)
-	// }
-
 	zl.Info("init handler")
 	metricHandler := handler.NewMetricsHandler(zl, metricService, flags.key)
 

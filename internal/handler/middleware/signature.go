@@ -3,6 +3,7 @@ package middleware
 import (
 	"bytes"
 	"encoding/base64"
+	"io"
 	"net/http"
 
 	"github.com/htrandev/metrics/pkg/sign"
@@ -31,6 +32,8 @@ func Sign(key string) func(next http.Handler) http.Handler {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
+
+			r.Body = io.NopCloser(bytes.NewReader(buf.Bytes()))
 
 			s := sign.Signature(key)
 			signature := s.Sign(buf.Bytes())
