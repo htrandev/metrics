@@ -1,10 +1,15 @@
 package model
 
 import (
+	"errors"
+	"fmt"
 	"math/rand/v2"
 	"runtime"
 	"sync/atomic"
 	"time"
+
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/mem"
 )
 
 type Collection struct {
@@ -54,4 +59,27 @@ func (c *Collection) Collect() []Metric {
 		Gauge("RandomValue", rnd.Float64()),
 		Counter("PollCount", c.counter.Load()),
 	}
+}
+
+func (c *Collection) CollectGopsutil() ([]Metric, error) {
+	errs := make([]error, 0, 2)
+	v, err := mem.VirtualMemory()
+	if err != nil {
+		errs = append(errs, fmt.Errorf("get virtual memory: %w", err))
+	}
+
+	cpuInfo, err := cpu.Percent(0, false)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("cpu percent: %w", err))
+	}
+
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+
+	return []Metric{
+		Gauge("TotalMemory", float64(v.Total)),
+		Gauge("FreeMemory", float64(v.Free)),
+		Gauge("CPUutilization1", float64(cpuInfo[0])),
+	}, nil
 }

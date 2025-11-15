@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -15,27 +16,37 @@ import (
 	"github.com/htrandev/metrics/pkg/sign"
 )
 
+type Collector interface {
+	Collect() []model.Metric
+	CollectGopsutil() ([]model.Metric, error)
+}
+
 var defaultOpts = &AgentOptions{
-	Addr:     "localhost:8080",
-	Key:      "",
-	MaxRetry: 3,
-	Logger:   zap.NewNop(),
+	Addr:           "localhost:8080",
+	Key:            "",
+	MaxRetry:       3,
+	RateLimit:      3,
+	PollInterval:   2 * time.Second,
+	ReportInterval: 10 * time.Second,
+	Client:         resty.New(),
+	Logger:         zap.NewNop(),
 }
 
 type AgentOptions struct {
-	Addr     string
-	Key      string
-	MaxRetry int
+	Addr      string
+	Key       string
+	MaxRetry  int
+	RateLimit int
 
-	Client *resty.Client
-	Logger *zap.Logger
+	PollInterval   time.Duration
+	ReportInterval time.Duration
+
+	Client    *resty.Client
+	Logger    *zap.Logger
+	Collector Collector
 }
 
-type Agent struct {
-	opts *AgentOptions
-}
-
-func New(opts *AgentOptions) *Agent {
+func validateOptions(opts *AgentOptions) *AgentOptions {
 	if opts == nil {
 		opts = defaultOpts
 	}
@@ -43,11 +54,133 @@ func New(opts *AgentOptions) *Agent {
 	if opts.MaxRetry <= 0 {
 		opts.MaxRetry = 3
 	}
+
+	if opts.RateLimit <= 0 {
+		opts.MaxRetry = 3
+	}
+
+	if opts.Addr == "" {
+		opts.Addr = "localhost:8080"
+	}
+
+	if opts.ReportInterval == 0 {
+		opts.ReportInterval = 10 * time.Second
+	}
+	if opts.PollInterval == 0 {
+		opts.PollInterval = 2 * time.Second
+	}
+
 	if opts.Logger == nil {
 		opts.Logger = zap.NewNop()
 	}
 
-	return &Agent{opts: opts}
+	return opts
+}
+
+type Agent struct {
+	opts *AgentOptions
+}
+
+func New(opts *AgentOptions) *Agent {
+	return &Agent{opts: validateOptions(opts)}
+}
+
+func (a *Agent) Run(ctx context.Context) {
+	a.opts.Logger.Info("running agent")
+	var wg sync.WaitGroup
+
+	for i := 0; i < a.opts.RateLimit; i++ {
+		wg.Add(1)
+
+		collectChan := make(chan []model.Metric)
+		a.Collect(ctx, collectChan)
+
+		go func() {
+			defer wg.Done()
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case metrics := <-collectChan:
+					a.opts.Logger.Info("send metrics with retry")
+
+					start := time.Now()
+					err := a.SendManyWithRetry(ctx, metrics)
+					elapsed := time.Since(start)
+
+					if err != nil {
+						a.opts.Logger.Error("can't send many metric", zap.Error(err))
+						continue
+					}
+
+					a.opts.Logger.Debug("successfully send metrics",
+						zap.Int("batch size", len(metrics)),
+						zap.String("elapsed", elapsed.String()),
+					)
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
+	a.opts.Logger.Info("finish running agent")
+}
+
+func (a *Agent) Collect(ctx context.Context, collectChan chan<- []model.Metric) {
+	go func() {
+		poller := a.poller(ctx)
+
+		reportTicker := time.NewTicker(a.opts.ReportInterval)
+		defer reportTicker.Stop()
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-reportTicker.C:
+		}
+
+		metrics := <-poller
+		collectChan <- metrics
+	}()
+}
+
+func (a *Agent) poller(ctx context.Context) <-chan []model.Metric {
+	pollChan := make(chan []model.Metric)
+
+	go func() {
+		defer close(pollChan)
+
+		pollTicker := time.NewTicker(a.opts.PollInterval)
+		defer pollTicker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-pollTicker.C:
+			}
+			// собираем метрики
+			a.opts.Logger.Info("collect metrics")
+			metrics := a.opts.Collector.Collect()
+			a.opts.Logger.Info("collect gopsutil metrics")
+			gopsUtilMetrics, err := a.opts.Collector.CollectGopsutil()
+			if err != nil {
+				a.opts.Logger.Error("failde to collect gopsutil metrics", zap.Error(err))
+			} else {
+				metrics = append(metrics, gopsUtilMetrics...)
+			}
+
+			// пытаемся отправить в канал,
+			// если канал полон, то продолжаем собирать метрики
+			select {
+			case pollChan <- metrics:
+			default:
+			}
+		}
+	}()
+
+	return pollChan
 }
 
 func (a *Agent) SendSingleMetric(ctx context.Context, metric model.Metric) error {
