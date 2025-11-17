@@ -68,7 +68,7 @@ func (c *Collection) CollectGopsutil() ([]Metric, error) {
 		errs = append(errs, fmt.Errorf("get virtual memory: %w", err))
 	}
 
-	cpuInfo, err := cpu.Percent(0, false)
+	cpuInfo, err := cpu.Percent(0, true)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("cpu percent: %w", err))
 	}
@@ -77,9 +77,14 @@ func (c *Collection) CollectGopsutil() ([]Metric, error) {
 		return nil, errors.Join(errs...)
 	}
 
-	return []Metric{
+	metrics := []Metric{
 		Gauge("TotalMemory", float64(v.Total)),
 		Gauge("FreeMemory", float64(v.Free)),
-		Gauge("CPUutilization1", float64(cpuInfo[0])),
-	}, nil
+	}
+
+	for i := range cpuInfo {
+		metrics = append(metrics, Gauge(fmt.Sprintf("CPUutilization%d", i), cpuInfo[i]))
+	}
+
+	return metrics, nil
 }

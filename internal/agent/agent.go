@@ -21,15 +21,17 @@ type Collector interface {
 	CollectGopsutil() ([]model.Metric, error)
 }
 
-var defaultOpts = &AgentOptions{
-	Addr:           "localhost:8080",
-	Key:            "",
-	MaxRetry:       3,
-	RateLimit:      3,
-	PollInterval:   2 * time.Second,
-	ReportInterval: 10 * time.Second,
-	Client:         resty.New(),
-	Logger:         zap.NewNop(),
+func defaultOpts() *AgentOptions {
+	return &AgentOptions{
+		Addr:           "localhost:8080",
+		Key:            "",
+		MaxRetry:       3,
+		RateLimit:      3,
+		PollInterval:   2 * time.Second,
+		ReportInterval: 10 * time.Second,
+		Client:         resty.New(),
+		Logger:         zap.NewNop(),
+	}
 }
 
 type AgentOptions struct {
@@ -48,7 +50,7 @@ type AgentOptions struct {
 
 func validateOptions(opts *AgentOptions) *AgentOptions {
 	if opts == nil {
-		opts = defaultOpts
+		opts = defaultOpts()
 	}
 
 	if opts.MaxRetry <= 0 {
@@ -56,7 +58,7 @@ func validateOptions(opts *AgentOptions) *AgentOptions {
 	}
 
 	if opts.RateLimit <= 0 {
-		opts.MaxRetry = 3
+		opts.RateLimit = 3
 	}
 
 	if opts.Addr == "" {
@@ -89,11 +91,11 @@ func (a *Agent) Run(ctx context.Context) {
 	a.opts.Logger.Info("running agent")
 	var wg sync.WaitGroup
 
+	collectChan := make(chan []model.Metric)
+	a.Collect(ctx, collectChan)
+
 	for i := 0; i < a.opts.RateLimit; i++ {
 		wg.Add(1)
-
-		collectChan := make(chan []model.Metric)
-		a.Collect(ctx, collectChan)
 
 		go func() {
 			defer wg.Done()
@@ -133,15 +135,17 @@ func (a *Agent) Collect(ctx context.Context, collectChan chan<- []model.Metric) 
 
 		reportTicker := time.NewTicker(a.opts.ReportInterval)
 		defer reportTicker.Stop()
+		for {
 
-		select {
-		case <-ctx.Done():
-			return
-		case <-reportTicker.C:
+			select {
+			case <-ctx.Done():
+				return
+			case <-reportTicker.C:
+			}
+
+			metrics := <-poller
+			collectChan <- metrics
 		}
-
-		metrics := <-poller
-		collectChan <- metrics
 	}()
 }
 
