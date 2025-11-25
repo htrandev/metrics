@@ -156,6 +156,7 @@ func TestUpdateHandler(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
+				"",
 			)
 
 			mux := http.NewServeMux()
@@ -234,6 +235,7 @@ func TestGetHandler(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
+				"",
 			)
 
 			mux := http.NewServeMux()
@@ -293,6 +295,7 @@ func TestGetAll(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
+				"",
 			)
 			handler := http.HandlerFunc(h.GetAll)
 			srv := httptest.NewServer(handler)
@@ -391,6 +394,7 @@ func TestUpdateJSON(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
+				"",
 			)
 			handler := http.HandlerFunc(h.UpdateJSON)
 			srv := httptest.NewServer(handler)
@@ -485,6 +489,7 @@ func TestUpdateManyJSON(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
+				"",
 			)
 			handler := http.HandlerFunc(h.UpdateManyJSON)
 			srv := httptest.NewServer(handler)
@@ -605,6 +610,7 @@ func TestGetJSON(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
+				"",
 			)
 			handler := http.HandlerFunc(h.GetJSON)
 			srv := httptest.NewServer(handler)
@@ -649,6 +655,7 @@ func TestPing(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
+				"",
 			)
 			handler := http.HandlerFunc(h.Ping)
 			srv := httptest.NewServer(handler)

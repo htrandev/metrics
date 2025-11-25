@@ -64,10 +64,10 @@ func run() error {
 	})
 
 	zl.Info("init handler")
-	metricHandler := handler.NewMetricsHandler(zl, metricService)
+	metricHandler := handler.NewMetricsHandler(zl, metricService, flags.key)
 
 	zl.Info("init router")
-	router, err := router.New(zl, metricHandler)
+	router, err := router.New(flags.key, zl, metricHandler)
 	if err != nil {
 		return fmt.Errorf("can't create new router: %w", err)
 	}

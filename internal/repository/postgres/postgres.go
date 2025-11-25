@@ -111,13 +111,7 @@ func (r *PostgresRepository) GetAll(ctx context.Context) ([]model.Metric, error)
 }
 
 func (r *PostgresRepository) Store(ctx context.Context, metric *model.Metric) error {
-	query := `INSERT INTO metrics (name, type, gauge, counter) 
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (name, type)
-		DO UPDATE SET 
-			gauge = $3, 
-			counter = metrics.counter + $4
-	;`
+	query := storeQuery()
 	_, err := r.db.ExecContext(ctx, query,
 		metric.Name,
 		metric.Value.Type,
@@ -135,24 +129,13 @@ func (r *PostgresRepository) StoreMany(ctx context.Context, metrics []model.Metr
 		return nil
 	}
 
-	query := `INSERT INTO metrics (name, type, gauge, counter) 
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (name, type)
-		DO UPDATE SET 
-			gauge = $3, 
-			counter = metrics.counter + $4
-	;`
+	query := storeQuery()
 
-	tx, err := r.db.Begin()
-	if err != nil {
-		return fmt.Errorf("repository/storeMany: begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	stmt, err := tx.PrepareContext(ctx, query)
+	stmt, err := r.db.PrepareContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("repository/storeMany: prepare query: %w", err)
 	}
+	defer stmt.Close()
 
 	errs := make([]error, 0, len(metrics))
 	for _, metric := range metrics {
@@ -170,7 +153,7 @@ func (r *PostgresRepository) StoreMany(ctx context.Context, metrics []model.Metr
 		return errors.Join(errs...)
 	}
 
-	return tx.Commit()
+	return nil
 }
 
 func (r *PostgresRepository) StoreManyWithRetry(ctx context.Context, metrics []model.Metric) error {
@@ -204,13 +187,7 @@ func isPgConnErr(err error) bool {
 }
 
 func (r *PostgresRepository) Set(ctx context.Context, metric *model.Metric) error {
-	query := `INSERT INTO metrics (name, type, gauge, counter) 
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (name, type) 
-		DO UPDATE SET 
-			gauge = $3, 
-			counter = $4
-	;`
+	query := setQuery()
 	_, err := r.db.ExecContext(ctx, query,
 		metric.Name,
 		metric.Value.Type,
@@ -234,4 +211,24 @@ func buildMetric(name string, t model.MetricType, gauge float64, counter int64) 
 	}
 
 	return m
+}
+
+func storeQuery() string {
+	return `INSERT INTO metrics (name, type, gauge, counter) 
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (name, type)
+		DO UPDATE SET 
+			gauge = $3, 
+			counter = metrics.counter + $4
+	;`
+}
+
+func setQuery() string {
+	return `INSERT INTO metrics (name, type, gauge, counter) 
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (name, type) 
+		DO UPDATE SET 
+			gauge = $3, 
+			counter = $4
+	;`
 }

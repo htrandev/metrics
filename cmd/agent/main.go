@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"go.uber.org/zap"
+	"github.com/go-resty/resty/v2"
 
 	"github.com/htrandev/metrics/internal/agent"
 	"github.com/htrandev/metrics/internal/model"
@@ -36,42 +36,29 @@ func run() error {
 		return fmt.Errorf("init logger: %w", err)
 	}
 
-	zl.Info("init tickers")
-	poolTicker := time.NewTicker(conf.pollInterval)
-	defer poolTicker.Stop()
-
-	reportTicker := time.NewTicker(conf.reportInterval)
-	defer reportTicker.Stop()
-
 	zl.Info("init resty client")
-
-	zl.Info("init agent")
-	agent := agent.New(conf.addr, conf.maxRetry, zl)
+	client := resty.New().
+		SetTimeout(30 * time.Second)
 
 	zl.Info("init collection")
 	collection := model.NewCollection()
 
+	zl.Info("init agent")
+	agent := agent.New(&agent.AgentOptions{
+		Addr:           conf.addr,
+		Key:            conf.key,
+		MaxRetry:       conf.maxRetry,
+		Logger:         zl,
+		Client:         client,
+		Collector:      collection,
+		RateLimit:      conf.rateLimit,
+		PollInterval:   conf.pollInterval,
+		ReportInterval: conf.reportInterval,
+	})
+
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
 
-	for {
-		var send bool
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-poolTicker.C:
-		case <-reportTicker.C:
-			send = true
-		}
-		zl.Info("collect metrics")
-
-		metrics := collection.Collect()
-
-		if send {
-			zl.Info("send metrics with retry")
-			if err := agent.SendManyWithRetry(ctx, metrics); err != nil {
-				zl.Error("can't send many metric", zap.Error(err))
-			}
-		}
-	}
+	agent.Run(ctx)
+	return nil
 }

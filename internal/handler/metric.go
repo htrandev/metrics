@@ -24,14 +24,25 @@ type Service interface {
 	Ping(ctx context.Context) error
 }
 
+type Signer interface {
+	Sign([]byte) []byte
+}
+
+type Cipher interface {
+	Encrypt([]byte) []byte
+}
+
 type MetricHandler struct {
 	service Service
 	logger  *zap.Logger
+	cipher  Cipher
+	signer  Signer
 }
 
 func NewMetricsHandler(
 	l *zap.Logger,
 	s Service,
+	key string,
 ) *MetricHandler {
 	return &MetricHandler{
 		logger:  l,
@@ -251,7 +262,7 @@ func (h *MetricHandler) GetJSON(rw http.ResponseWriter, r *http.Request) {
 
 	body, err := easyjson.Marshal(response)
 	if err != nil {
-		h.logger.Error("get from storage", zap.Error(err), scope)
+		h.logger.Error("marshal response", zap.Error(err), scope)
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
