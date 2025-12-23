@@ -128,14 +128,14 @@ func (h *MetricHandler) UpdateManyJSON(rw http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	info := buildAuditInfoMessage(m, getIp(r))
+	info := buildAuditInfoMessage(m, getIP(r))
 	h.Publisher.Update(ctx, info)
 
 	rw.Header().Set("Content-Type", "application/json")
 	rw.WriteHeader(http.StatusOK)
 }
 
-func getIp(r *http.Request) string {
+func getIP(r *http.Request) string {
 	ip := r.Header.Get("X-Real-Ip")
 	if ip == "" {
 		ip = r.Header.Get("X-Forwarded-For")
