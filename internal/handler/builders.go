@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
-	"github.com/htrandev/metrics/internal/model"
 	"github.com/mailru/easyjson"
+
+	"github.com/htrandev/metrics/internal/audit"
+	"github.com/htrandev/metrics/internal/model"
 )
 
 func buildSingleUpdateRequest(r *http.Request) (*model.Metric, error) {
@@ -117,4 +120,17 @@ func buildInternalMetric(metric model.Metrics) (model.Metric, error) {
 	}
 
 	return m, nil
+}
+
+func buildAuditInfoMessage(metrics []model.Metric, ip string) audit.AuditInfo {
+	names := make([]string, 0, len(metrics))
+	for _, metric := range metrics {
+		names = append(names, metric.Name)
+	}
+
+	return audit.AuditInfo{
+		Timestamp: time.Now().Unix(),
+		Metrics:   names,
+		IP:        ip,
+	}
 }

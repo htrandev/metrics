@@ -11,10 +11,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-resty/resty/v2"
+	"github.com/google/uuid"
 	"github.com/pressly/goose/v3"
 	"github.com/pressly/goose/v3/database"
 	"go.uber.org/zap"
 
+	"github.com/htrandev/metrics/internal/audit"
 	"github.com/htrandev/metrics/internal/handler"
 	"github.com/htrandev/metrics/internal/model"
 	"github.com/htrandev/metrics/internal/repository/local"
@@ -63,8 +66,38 @@ func run() error {
 		Storage: storage,
 	})
 
+	zl.Info("init publisher")
+	p := audit.NewAuditor()
+
+	zl.Info("init subscribers")
+	subs := make([]audit.Observer, 0, 2)
+
+	if flags.auditFile != "" {
+		zl.Info("init file auditor")
+		flag := os.O_RDWR | os.O_CREATE | os.O_APPEND
+		f, err := os.OpenFile(flags.auditFile, flag, 0664)
+		if err != nil {
+			return fmt.Errorf("open audit file: %w", err)
+		}
+
+		fileAudit := audit.NewFile(uuid.New(), f, zl)
+		subs = append(subs, fileAudit)
+	}
+
+	if flags.auditURL != "" {
+		zl.Info("init url auditor")
+		auditClient := resty.New().
+			SetTimeout(30 * time.Second)
+
+		urlAudit := audit.NewURL(uuid.New(), flags.auditURL, auditClient, zl)
+		subs = append(subs, urlAudit)
+	}
+
+	zl.Info("register subscribers")
+	registerSubscribers(p, subs...)
+
 	zl.Info("init handler")
-	metricHandler := handler.NewMetricsHandler(zl, metricService, flags.key)
+	metricHandler := handler.NewMetricsHandler(zl, metricService, p)
 
 	zl.Info("init router")
 	router, err := router.New(flags.key, zl, metricHandler)
@@ -142,4 +175,10 @@ func newStorage(ctx context.Context, cfg flags, logger *zap.Logger) (model.Stora
 	}
 
 	return storage, nil
+}
+
+func registerSubscribers(p *audit.Auditor, subs ...audit.Observer) {
+	for _, sub := range subs {
+		p.Register(sub)
+	}
 }

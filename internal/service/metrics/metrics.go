@@ -20,10 +20,6 @@ type Storage interface {
 	Ping(ctx context.Context) error
 }
 
-type FileStorage interface {
-	Flush(context.Context, []model.Metric) error
-}
-
 type ServiseOptions struct {
 	Logger *zap.Logger
 
@@ -90,5 +86,7 @@ func (s *MetricsService) StoreManyWithRetry(ctx context.Context, metrics []model
 	if err := s.opts.Storage.StoreManyWithRetry(ctx, metrics); err != nil {
 		return fmt.Errorf("store many with retry metrics: %w", err)
 	}
+
+	// todo publisher
 	return nil
 }

@@ -17,6 +17,8 @@ type flags struct {
 	databaseDsn   string
 	maxRetry      int
 	key           string
+	auditFile     string
+	auditURL      string
 }
 
 func parseFlags() (flags, error) {
@@ -31,6 +33,8 @@ func parseFlags() (flags, error) {
 	flag.StringVar(&f.databaseDsn, "d", "", "db dsn")
 	flag.IntVar(&f.maxRetry, "maxRetry", 3, "pg max retry")
 	flag.StringVar(&f.key, "k", "", "secret key")
+	flag.StringVar(&f.auditFile, "audit-file", "", "file path to save audit")
+	flag.StringVar(&f.auditURL, "audit-url", "", "url to send audit")
 
 	flag.Parse()
 
@@ -77,6 +81,14 @@ func parseFlags() (flags, error) {
 
 	if key := os.Getenv("KEY"); key != "" {
 		f.key = key
+	}
+
+	if auditFile := os.Getenv("AUDIT_FILE"); auditFile != "" {
+		f.auditFile = auditFile
+	}
+	
+	if auditURL := os.Getenv("AUDIT_URL"); auditURL != "" {
+		f.auditURL = auditURL
 	}
 
 	return f, nil

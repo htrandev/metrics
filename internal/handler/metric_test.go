@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
+	"github.com/htrandev/metrics/internal/audit"
 	"github.com/htrandev/metrics/internal/model"
 	"github.com/htrandev/metrics/internal/repository"
 )
@@ -100,6 +101,10 @@ func (m *mockService) Ping(context.Context) error {
 	return nil
 }
 
+type mockPublisher struct{}
+
+func (m *mockPublisher) Update(ctx context.Context, info audit.AuditInfo) {}
+
 func TestUpdateHandler(t *testing.T) {
 	log := zap.NewNop()
 
@@ -156,7 +161,7 @@ func TestUpdateHandler(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
-				"",
+				&mockPublisher{},
 			)
 
 			mux := http.NewServeMux()
@@ -235,7 +240,7 @@ func TestGetHandler(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
-				"",
+				&mockPublisher{},
 			)
 
 			mux := http.NewServeMux()
@@ -295,7 +300,7 @@ func TestGetAll(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
-				"",
+				&mockPublisher{},
 			)
 			handler := http.HandlerFunc(h.GetAll)
 			srv := httptest.NewServer(handler)
@@ -394,7 +399,7 @@ func TestUpdateJSON(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
-				"",
+				&mockPublisher{},
 			)
 			handler := http.HandlerFunc(h.UpdateJSON)
 			srv := httptest.NewServer(handler)
@@ -489,7 +494,7 @@ func TestUpdateManyJSON(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
-				"",
+				&mockPublisher{},
 			)
 			handler := http.HandlerFunc(h.UpdateManyJSON)
 			srv := httptest.NewServer(handler)
@@ -610,7 +615,7 @@ func TestGetJSON(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
-				"",
+				&mockPublisher{},
 			)
 			handler := http.HandlerFunc(h.GetJSON)
 			srv := httptest.NewServer(handler)
@@ -655,7 +660,7 @@ func TestPing(t *testing.T) {
 			h := NewMetricsHandler(
 				log,
 				tc.service,
-				"",
+				&mockPublisher{},
 			)
 			handler := http.HandlerFunc(h.Ping)
 			srv := httptest.NewServer(handler)
