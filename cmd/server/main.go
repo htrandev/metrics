@@ -27,6 +27,8 @@ import (
 	"github.com/htrandev/metrics/migrations"
 	"github.com/htrandev/metrics/pkg/logger"
 
+	_ "net/http/pprof"
+
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -100,17 +102,21 @@ func run() error {
 	metricHandler := handler.NewMetricsHandler(zl, metricService, p)
 
 	zl.Info("init router")
-	router, err := router.New(flags.key, zl, metricHandler)
-	if err != nil {
-		return fmt.Errorf("can't create new router: %w", err)
-	}
+	router := router.New(flags.key, zl, metricHandler)
 
 	srv := http.Server{
 		Addr:    flags.addr,
 		Handler: router,
 	}
 
-	zl.Info("start serving")
+	go func() {
+		zl.Info(fmt.Sprintf("start pprof on http://%s/debug/pprof/", flags.pprofAddr))
+		if err := http.ListenAndServe(flags.pprofAddr, nil); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	zl.Info("start serving", zap.String("addr", flags.addr))
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("can't start server: %v", err)

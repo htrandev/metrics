@@ -243,7 +243,7 @@ func (m *MemStorage) restore() error {
 			continue
 		}
 
-		m.opts.Logger.Debug("set metric", zap.Any("metric", m))
+		m.opts.Logger.Debug("set metric", zap.Any("metric", metric))
 		if err := m.Set(ctx, &metric); err != nil {
 			m.opts.Logger.Error("can't set metric", zap.Error(err), zap.Any("metric", m), zap.String("scope", "restore"))
 			continue

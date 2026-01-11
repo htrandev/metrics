@@ -19,6 +19,7 @@ type flags struct {
 	key           string
 	auditFile     string
 	auditURL      string
+	pprofAddr     string
 }
 
 func parseFlags() (flags, error) {
@@ -35,6 +36,7 @@ func parseFlags() (flags, error) {
 	flag.StringVar(&f.key, "k", "", "secret key")
 	flag.StringVar(&f.auditFile, "audit-file", "", "file path to save audit")
 	flag.StringVar(&f.auditURL, "audit-url", "", "url to send audit")
+	flag.StringVar(&f.pprofAddr, "pprod-addr", "localhost:6060", "pprof address")
 
 	flag.Parse()
 
@@ -86,9 +88,13 @@ func parseFlags() (flags, error) {
 	if auditFile := os.Getenv("AUDIT_FILE"); auditFile != "" {
 		f.auditFile = auditFile
 	}
-	
+
 	if auditURL := os.Getenv("AUDIT_URL"); auditURL != "" {
 		f.auditURL = auditURL
+	}
+
+	if pprofAddr := os.Getenv("PPROF_ADDRESS"); pprofAddr != "" {
+		f.pprofAddr = pprofAddr
 	}
 
 	return f, nil
