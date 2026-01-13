@@ -14,11 +14,13 @@ import (
 	"github.com/htrandev/metrics/internal/repository"
 )
 
+// PostgresRepository реализует хранилище метрик в PostgreSQL
 type PostgresRepository struct {
 	db       *sql.DB
 	maxRetry int
 }
 
+// New возвращает новый экземпляр PostgresRepository.
 func New(db *sql.DB, maxRetry int) *PostgresRepository {
 	if maxRetry == 0 {
 		maxRetry = 3
@@ -29,6 +31,7 @@ func New(db *sql.DB, maxRetry int) *PostgresRepository {
 	}
 }
 
+// Ping проверяет доступность PostgreSQL соединения.
 func (r *PostgresRepository) Ping(ctx context.Context) error {
 	if err := r.db.Ping(); err != nil {
 		return fmt.Errorf("ping db: %w", err)
@@ -36,10 +39,12 @@ func (r *PostgresRepository) Ping(ctx context.Context) error {
 	return nil
 }
 
+// Close закрывает пул соединений PostgreSQL.
 func (r *PostgresRepository) Close() error {
 	return r.db.Close()
 }
 
+// Truncate удаляет все метрики из таблицы.
 func (r *PostgresRepository) Truncate(ctx context.Context) error {
 	_, err := r.db.ExecContext(ctx, `TRUNCATE TABLE metrics`)
 	if err != nil {
@@ -48,6 +53,7 @@ func (r *PostgresRepository) Truncate(ctx context.Context) error {
 	return nil
 }
 
+// Get возвращает метрику по имени.
 func (r *PostgresRepository) Get(ctx context.Context, name string) (model.Metric, error) {
 	query := `SELECT type, gauge, counter
 		FROM metrics
@@ -76,6 +82,7 @@ func (r *PostgresRepository) Get(ctx context.Context, name string) (model.Metric
 	return buildMetric(name, t, gauge.Float64, counter.Int64), nil
 }
 
+// GetAll возвращает все метрики.
 func (r *PostgresRepository) GetAll(ctx context.Context) ([]model.Metric, error) {
 	query := `SELECT name, type, gauge, counter
 		FROM metrics
@@ -110,6 +117,7 @@ func (r *PostgresRepository) GetAll(ctx context.Context) ([]model.Metric, error)
 	return metrics, nil
 }
 
+// Store сохраняет/обновляет метрику.
 func (r *PostgresRepository) Store(ctx context.Context, metric *model.Metric) error {
 	query := storeQuery()
 	_, err := r.db.ExecContext(ctx, query,
@@ -124,6 +132,7 @@ func (r *PostgresRepository) Store(ctx context.Context, metric *model.Metric) er
 	return nil
 }
 
+// StoreMany сохраняет батч метрик.
 func (r *PostgresRepository) StoreMany(ctx context.Context, metrics []model.Metric) error {
 	if len(metrics) == 0 {
 		return nil
@@ -156,6 +165,7 @@ func (r *PostgresRepository) StoreMany(ctx context.Context, metrics []model.Metr
 	return nil
 }
 
+// StoreMany сохраняет батч метрик с повтором при сетевых ошибках PostgreSQL.
 func (r *PostgresRepository) StoreManyWithRetry(ctx context.Context, metrics []model.Metric) error {
 	err := r.StoreMany(ctx, metrics)
 	if err != nil {
@@ -186,6 +196,7 @@ func isPgConnErr(err error) bool {
 	return false
 }
 
+// Set сохраняет метрику с перезаписью предыдущих занчений.
 func (r *PostgresRepository) Set(ctx context.Context, metric *model.Metric) error {
 	query := setQuery()
 	_, err := r.db.ExecContext(ctx, query,
@@ -200,6 +211,7 @@ func (r *PostgresRepository) Set(ctx context.Context, metric *model.Metric) erro
 	return nil
 }
 
+// buildMetric преобразует переданные данные структуру model.Metric с учетом типа.
 func buildMetric(name string, t model.MetricType, gauge float64, counter int64) model.Metric {
 	var m model.Metric
 
@@ -213,6 +225,7 @@ func buildMetric(name string, t model.MetricType, gauge float64, counter int64) 
 	return m
 }
 
+// storeQuery возвращает UPSERT запрос с накоплением counter.
 func storeQuery() string {
 	return `INSERT INTO metrics (name, type, gauge, counter) 
 		VALUES ($1, $2, $3, $4)
@@ -223,6 +236,7 @@ func storeQuery() string {
 	;`
 }
 
+// setQuery возвращает UPSERT запрос с полной перезаписью counter.
 func setQuery() string {
 	return `INSERT INTO metrics (name, type, gauge, counter) 
 		VALUES ($1, $2, $3, $4)

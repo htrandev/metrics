@@ -18,6 +18,7 @@ import (
 	"github.com/htrandev/metrics/internal/repository"
 )
 
+// StorageOptions параметры локального хранилища.
 type StorageOptions struct {
 	FileName string
 	Interval time.Duration
@@ -25,6 +26,7 @@ type StorageOptions struct {
 	MaxRetry int
 }
 
+// MemStorage реализует in-memory хранилище метрик.
 type MemStorage struct {
 	metrics map[string]model.Metric
 
@@ -36,6 +38,7 @@ type MemStorage struct {
 	mu sync.RWMutex
 }
 
+// NewRepository создает новое хранилище без восстановления из файла.
 func NewRepository(opts *StorageOptions) (*MemStorage, error) {
 	flag := os.O_RDWR | os.O_CREATE
 	storage, err := new(flag, opts)
@@ -45,6 +48,7 @@ func NewRepository(opts *StorageOptions) (*MemStorage, error) {
 	return storage, nil
 }
 
+// NewRestore создает хранилище с восстановлением метрик из файла.
 func NewRestore(opts *StorageOptions) (*MemStorage, error) {
 	flag := os.O_RDWR | os.O_CREATE | os.O_APPEND
 
@@ -84,6 +88,7 @@ func new(flag int, opts *StorageOptions) (*MemStorage, error) {
 	return storage, nil
 }
 
+// Ping проверяет доступность хранилища.
 func (m *MemStorage) Ping(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -193,6 +198,7 @@ func (m *MemStorage) GetAll(ctx context.Context) ([]model.Metric, error) {
 	return metrics, nil
 }
 
+// flush асинхронно сохраняет все метрики в файл каждые Interval секунд.
 func (m *MemStorage) flush(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -231,6 +237,7 @@ func (m *MemStorage) flush(interval time.Duration) {
 	}
 }
 
+// restore восстанавливает метрики из JSONL файла при запуске.
 func (m *MemStorage) restore() error {
 	ctx := context.Background()
 	// читаем из файла пока не дойдем до конца
@@ -257,10 +264,12 @@ func (m *MemStorage) restore() error {
 	return nil
 }
 
+// Close закрывает файл.
 func (m *MemStorage) Close() error {
 	return m.file.Close()
 }
 
+// Up проверяет готовность хранилища.
 func (m *MemStorage) Up() error {
 	return nil
 }

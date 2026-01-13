@@ -12,14 +12,17 @@ import (
 	"github.com/shirou/gopsutil/v4/mem"
 )
 
+// Collection собирает метрики runtime Go и системные метрики через gopsutil.
 type Collection struct {
 	counter atomic.Int64
 }
 
+// NewCollection возвращает новый экземпляр Collection для сбора метрик.
 func NewCollection() *Collection {
 	return &Collection{}
 }
 
+// Collect собирает метрики runtime Go.
 func (c *Collection) Collect() []Metric {
 	c.counter.Add(1)
 
@@ -61,6 +64,7 @@ func (c *Collection) Collect() []Metric {
 	}
 }
 
+// CollectGopsutil собирает системные метрики через gopsutil.
 func (c *Collection) CollectGopsutil() ([]Metric, error) {
 	errs := make([]error, 0, 2)
 	v, err := mem.VirtualMemory()

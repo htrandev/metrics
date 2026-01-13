@@ -11,6 +11,7 @@ import (
 
 var _ Observer = (*FileAudit)(nil)
 
+// FileAudit реализует Observer для записи событий в файл.
 type FileAudit struct {
 	id   uuid.UUID
 	file *os.File
@@ -18,6 +19,7 @@ type FileAudit struct {
 	logger *zap.Logger
 }
 
+// NewFile возвращает новый экземпляр FileAudit.
 func NewFile(id uuid.UUID, f *os.File, l *zap.Logger) *FileAudit {
 	if l == nil {
 		l = zap.NewNop()
@@ -31,10 +33,12 @@ func NewFile(id uuid.UUID, f *os.File, l *zap.Logger) *FileAudit {
 	}
 }
 
+// GetID возвращает уникальный идентификатор FileAudit.
 func (f *FileAudit) GetID() string {
 	return f.id.String()
 }
 
+// Update сериализует полученную информацию и записывает в файл.
 func (f *FileAudit) Update(ctx context.Context, info AuditInfo) {
 	f.logger.Debug("write info to file")
 
@@ -54,8 +58,10 @@ func (f *FileAudit) Update(ctx context.Context, info AuditInfo) {
 		return
 	}
 
+	f.logger.Debug("audit info successfully written to file")
 }
 
+// Close закрывает файловый дескриптор.
 func (f *FileAudit) Close() error {
 	return f.file.Close()
 }

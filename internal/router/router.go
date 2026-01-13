@@ -10,6 +10,16 @@ import (
 	"github.com/htrandev/metrics/internal/handler/middleware"
 )
 
+// New возвращает новый экземляр
+// 
+// Эндпоинты:
+//   - GET    / - получить все метрики
+//   - GET    /value/{{metricType}/{metricName} - получить значение метрики
+//   - POST   /update/{metricType}/{metricName}/{metricValue} - обновить метрику
+//   - POST   /update/ - обновить метрику в формате JSON
+//   - GET    /value/ - получить значение метрики в формате JSON
+//   - GET    /ping - проверка доступности БД
+//   - POST   /updates/ - обновить несколько метрик в формате JSON
 func New(key string, logger *zap.Logger, handler *handler.MetricHandler) *chi.Mux {
 	r := chi.NewRouter()
 

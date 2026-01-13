@@ -10,6 +10,8 @@ import (
 	"github.com/htrandev/metrics/internal/model"
 )
 
+// Update обрабатывает HTTP POST /update/{metricType}/{metricName}/{metricValue} для сохранения одной метрики.
+// Параметры извлекаются из пути URL. Поддерживает gauge и counter типы значений.
 func (h *MetricHandler) Update(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -59,6 +61,7 @@ func (h *MetricHandler) Update(rw http.ResponseWriter, r *http.Request) {
 	rw.WriteHeader(http.StatusOK)
 }
 
+// UpdateJSON обрабатывает HTTP POST /update/ с JSON телом для сохранения одной метрики.
 func (h *MetricHandler) UpdateJSON(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -104,6 +107,8 @@ func (h *MetricHandler) UpdateJSON(rw http.ResponseWriter, r *http.Request) {
 
 }
 
+// UpdateManyJSON обрабатывает HTTP POST /updates/ с JSON массивом метрик.
+// Сохраняет батч метрик с повторными попытками и публикует событие.
 func (h *MetricHandler) UpdateManyJSON(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

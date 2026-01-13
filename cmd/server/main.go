@@ -63,13 +63,13 @@ func run() error {
 	defer storage.Close()
 
 	zl.Info("init metric service")
-	metricService := metrics.NewService(&metrics.ServiseOptions{
+	metricService := metrics.NewService(&metrics.ServiсeOptions{
 		Logger:  zl,
 		Storage: storage,
 	})
 
 	zl.Info("init publisher")
-	p := audit.NewAuditor()
+	auditor := audit.NewAuditor()
 
 	zl.Info("init subscribers")
 	subs := make([]audit.Observer, 0, 2)
@@ -96,10 +96,10 @@ func run() error {
 	}
 
 	zl.Info("register subscribers")
-	registerSubscribers(p, subs...)
+	registerSubscribers(auditor, subs...)
 
 	zl.Info("init handler")
-	metricHandler := handler.NewMetricsHandler(zl, metricService, p)
+	metricHandler := handler.NewMetricsHandler(zl, metricService, auditor)
 
 	zl.Info("init router")
 	router := router.New(flags.key, zl, metricHandler)

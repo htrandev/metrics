@@ -14,6 +14,7 @@ import (
 
 var _ Observer = (*URLAudit)(nil)
 
+// URLAudit реализует Observer для отправки событий по HTTP на указанный URL.
 type URLAudit struct {
 	id     uuid.UUID
 	url    string
@@ -22,11 +23,12 @@ type URLAudit struct {
 	logger *zap.Logger
 }
 
+// NewURL возвращает новый экземпляр URLAudit.
 func NewURL(id uuid.UUID, url string, client *resty.Client, l *zap.Logger) *URLAudit {
 	if l == nil {
 		l = zap.NewNop()
 	}
-	l.With(zap.String("scope", "fileAudit"))
+	l.With(zap.String("scope", "urlAudit"))
 
 	if client == nil {
 		client = resty.New().
@@ -41,10 +43,12 @@ func NewURL(id uuid.UUID, url string, client *resty.Client, l *zap.Logger) *URLA
 	}
 }
 
+// GetID возвращает уникальный идентификатор URLAudit.
 func (u *URLAudit) GetID() string {
 	return u.id.String()
 }
 
+// Update сериализует полученную информацию и отправляет POST-апрос на указанный URL.
 func (u *URLAudit) Update(ctx context.Context, info AuditInfo) {
 	u.logger.Debug("send info to url")
 	b, err := easyjson.Marshal(info)

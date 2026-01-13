@@ -12,6 +12,8 @@ import (
 	"github.com/htrandev/metrics/internal/repository"
 )
 
+// Get обрабатывает HTTP GET /value/{metricType}/{metricName} для получения одной метрики.
+// Возвращает значение в plain text формате. 
 func (h *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -44,6 +46,7 @@ func (h *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
 	rw.Write([]byte(metric.Value.String()))
 }
 
+// GetAll обрабатывает HTTP GET / для получения всех метрик.
 func (h *MetricHandler) GetAll(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -68,6 +71,8 @@ func (h *MetricHandler) GetAll(rw http.ResponseWriter, r *http.Request) {
 	rw.Write([]byte(builder.String()))
 }
 
+// GetJSON обрабатывает HTTP POST /value/ для получения одной метрики в JSON.
+// Парсит тело запроса, возвращает структурированный JSON-ответ.
 func (h *MetricHandler) GetJSON(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
