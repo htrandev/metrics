@@ -56,7 +56,7 @@ func run() error {
 		ReportInterval: conf.reportInterval,
 	})
 
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 	defer cancel()
 
 	agent.Run(ctx)

@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"compress/gzip"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -114,7 +113,6 @@ func Compress() func(next http.Handler) http.Handler {
 			if sendsGzip {
 				cr, err := newCompressReader(r.Body)
 				if err != nil {
-					fmt.Println("new compress reader:", err)
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}
