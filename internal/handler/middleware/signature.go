@@ -9,6 +9,7 @@ import (
 	"github.com/htrandev/metrics/pkg/sign"
 )
 
+// Sign возвращает HTTP middleware для проверки подписи запросов.
 func Sign(key string) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

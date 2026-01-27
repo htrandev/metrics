@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/htrandev/metrics/internal/model"
 	"github.com/mailru/easyjson"
+
+	"github.com/htrandev/metrics/internal/model"
 )
 
 func buildSingleRequest(metric model.Metric) model.Metrics {

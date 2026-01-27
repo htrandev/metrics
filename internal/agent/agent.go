@@ -16,11 +16,13 @@ import (
 	"github.com/htrandev/metrics/pkg/sign"
 )
 
+// Collector предоставляет интерфейс взаимодействия со сборщик метрик.
 type Collector interface {
 	Collect() []model.Metric
 	CollectGopsutil() ([]model.Metric, error)
 }
 
+// defaultOpts определяет параметры для агента по умолчанию.
 func defaultOpts() *AgentOptions {
 	return &AgentOptions{
 		Addr:           "localhost:8080",
@@ -34,8 +36,9 @@ func defaultOpts() *AgentOptions {
 	}
 }
 
+// AgentOptions определяет параметры для Агента.
 type AgentOptions struct {
-	Addr      string
+	Addr      string 
 	Key       string
 	MaxRetry  int
 	RateLimit int
@@ -48,6 +51,8 @@ type AgentOptions struct {
 	Collector Collector
 }
 
+// validateOptions валидирует параметры агента и подставляет значения по умолчанию, 
+// если параметр не был предоставлен.
 func validateOptions(opts *AgentOptions) *AgentOptions {
 	if opts == nil {
 		opts = defaultOpts()
@@ -79,14 +84,17 @@ func validateOptions(opts *AgentOptions) *AgentOptions {
 	return opts
 }
 
+// Agent определяет агента для сбора метрик и отправки их на сервер.
 type Agent struct {
 	opts *AgentOptions
 }
 
+// New возвращает новый экземпляр агента.
 func New(opts *AgentOptions) *Agent {
 	return &Agent{opts: validateOptions(opts)}
 }
 
+// Run собирает метрики и отправляет их на сервер.
 func (a *Agent) Run(ctx context.Context) {
 	a.opts.Logger.Info("running agent")
 	var wg sync.WaitGroup
@@ -129,6 +137,7 @@ func (a *Agent) Run(ctx context.Context) {
 	a.opts.Logger.Info("finish running agent")
 }
 
+// Collect собирает метрики и передаёт их в полученный канал(collectChan).
 func (a *Agent) Collect(ctx context.Context, collectChan chan<- []model.Metric) {
 	go func() {
 		poller := a.poller(ctx)
@@ -149,6 +158,7 @@ func (a *Agent) Collect(ctx context.Context, collectChan chan<- []model.Metric) 
 	}()
 }
 
+// poller возвращает канал, в который отправляются полученные метрики.
 func (a *Agent) poller(ctx context.Context) <-chan []model.Metric {
 	pollChan := make(chan []model.Metric)
 
@@ -187,6 +197,7 @@ func (a *Agent) poller(ctx context.Context) <-chan []model.Metric {
 	return pollChan
 }
 
+// SendSingleMetric отправляет за раз одну метрику на сервер.
 func (a *Agent) SendSingleMetric(ctx context.Context, metric model.Metric) error {
 	req := buildSingleRequest(metric)
 	body, err := buildSingleBody(req)
@@ -210,6 +221,7 @@ func (a *Agent) SendSingleMetric(ctx context.Context, metric model.Metric) error
 	return nil
 }
 
+// SendManyMetrics отправляет за раз несколько метрик на сервер.
 func (a *Agent) SendManyMetrics(ctx context.Context, metrics []model.Metric) error {
 	if len(metrics) == 0 {
 		return nil
@@ -246,6 +258,8 @@ func (a *Agent) SendManyMetrics(ctx context.Context, metrics []model.Metric) err
 	return nil
 }
 
+// SendManyWithRetry отправляет за раз несколько метрик на сервер,
+// если произошла ошибка, пытается повторно отправить указанное в MaxRetry количество раз.
 func (a *Agent) SendManyWithRetry(ctx context.Context, metrics []model.Metric) error {
 	err := a.SendManyMetrics(ctx, metrics)
 

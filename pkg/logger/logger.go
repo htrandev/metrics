@@ -6,6 +6,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// NewZapLogger возвращает новый экземпляр логгера.
 func NewZapLogger(level string) (*zap.Logger, error) {
 	lvl, err := zap.ParseAtomicLevel(level)
 	if err != nil {

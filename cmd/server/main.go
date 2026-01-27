@@ -11,10 +11,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-resty/resty/v2"
+	"github.com/google/uuid"
 	"github.com/pressly/goose/v3"
 	"github.com/pressly/goose/v3/database"
 	"go.uber.org/zap"
 
+	"github.com/htrandev/metrics/internal/audit"
 	"github.com/htrandev/metrics/internal/handler"
 	"github.com/htrandev/metrics/internal/model"
 	"github.com/htrandev/metrics/internal/repository/local"
@@ -23,6 +26,8 @@ import (
 	"github.com/htrandev/metrics/internal/service/metrics"
 	"github.com/htrandev/metrics/migrations"
 	"github.com/htrandev/metrics/pkg/logger"
+
+	_ "net/http/pprof"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -58,26 +63,60 @@ func run() error {
 	defer storage.Close()
 
 	zl.Info("init metric service")
-	metricService := metrics.NewService(&metrics.ServiseOptions{
+	metricService := metrics.NewService(&metrics.ServiсeOptions{
 		Logger:  zl,
 		Storage: storage,
 	})
 
+	zl.Info("init publisher")
+	auditor := audit.NewAuditor()
+
+	zl.Info("init subscribers")
+	subs := make([]audit.Observer, 0, 2)
+
+	if flags.auditFile != "" {
+		zl.Info("init file auditor")
+		flag := os.O_RDWR | os.O_CREATE | os.O_APPEND
+		f, err := os.OpenFile(flags.auditFile, flag, 0664)
+		if err != nil {
+			return fmt.Errorf("open audit file: %w", err)
+		}
+
+		fileAudit := audit.NewFile(uuid.New(), f, zl)
+		subs = append(subs, fileAudit)
+	}
+
+	if flags.auditURL != "" {
+		zl.Info("init url auditor")
+		auditClient := resty.New().
+			SetTimeout(30 * time.Second)
+
+		urlAudit := audit.NewURL(uuid.New(), flags.auditURL, auditClient, zl)
+		subs = append(subs, urlAudit)
+	}
+
+	zl.Info("register subscribers")
+	registerSubscribers(auditor, subs...)
+
 	zl.Info("init handler")
-	metricHandler := handler.NewMetricsHandler(zl, metricService, flags.key)
+	metricHandler := handler.NewMetricsHandler(zl, metricService, auditor)
 
 	zl.Info("init router")
-	router, err := router.New(flags.key, zl, metricHandler)
-	if err != nil {
-		return fmt.Errorf("can't create new router: %w", err)
-	}
+	router := router.New(flags.key, zl, metricHandler)
 
 	srv := http.Server{
 		Addr:    flags.addr,
 		Handler: router,
 	}
 
-	zl.Info("start serving")
+	go func() {
+		zl.Info(fmt.Sprintf("start pprof on http://%s/debug/pprof/", flags.pprofAddr))
+		if err := http.ListenAndServe(flags.pprofAddr, nil); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	zl.Info("start serving", zap.String("addr", flags.addr))
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("can't start server: %v", err)
@@ -85,7 +124,7 @@ func run() error {
 	}()
 
 	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 
 	<-stop
 
@@ -142,4 +181,10 @@ func newStorage(ctx context.Context, cfg flags, logger *zap.Logger) (model.Stora
 	}
 
 	return storage, nil
+}
+
+func registerSubscribers(p *audit.Auditor, subs ...audit.Observer) {
+	for _, sub := range subs {
+		p.Register(sub)
+	}
 }

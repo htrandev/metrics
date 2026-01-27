@@ -138,7 +138,7 @@ func TestGet(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := NewService(&ServiseOptions{Storage: tc.storage})
+			s := NewService(&ServiсeOptions{Storage: tc.storage})
 
 			m, err := s.Get(ctx, tc.metricName)
 			if tc.wantErr {
@@ -183,7 +183,7 @@ func TestGetAll(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := NewService(&ServiseOptions{Storage: tc.storage})
+			s := NewService(&ServiсeOptions{Storage: tc.storage})
 
 			m, err := s.GetAll(ctx)
 			if tc.wantErr {
@@ -229,7 +229,7 @@ func TestStore(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := NewService(&ServiseOptions{Storage: tc.storage})
+			s := NewService(&ServiсeOptions{Storage: tc.storage})
 
 			err := s.Store(ctx, tc.metric)
 			if tc.wantErr {
@@ -280,7 +280,7 @@ func TestStoreMany(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := NewService(&ServiseOptions{Storage: tc.storage})
+			s := NewService(&ServiсeOptions{Storage: tc.storage})
 
 			err := s.StoreMany(ctx, tc.metrics)
 			if tc.wantErr {
@@ -331,7 +331,7 @@ func TestStoreManyWithRetry(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := NewService(&ServiseOptions{Storage: tc.storage})
+			s := NewService(&ServiсeOptions{Storage: tc.storage})
 
 			err := s.StoreManyWithRetry(ctx, tc.metrics)
 			if tc.wantErr {
@@ -368,7 +368,7 @@ func TestPing(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := NewService(&ServiseOptions{Storage: tc.storage})
+			s := NewService(&ServiсeOptions{Storage: tc.storage})
 			err := s.Ping(ctx)
 			if tc.wantErr {
 				require.Error(t, err)

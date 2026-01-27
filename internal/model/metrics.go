@@ -6,6 +6,7 @@ import (
 	"strconv"
 )
 
+// Storager определяет интерфейс хранилища метрик.
 type Storager interface {
 	Get(ctx context.Context, name string) (Metric, error)
 	GetAll(ctx context.Context) ([]Metric, error)
@@ -20,29 +21,35 @@ type Storager interface {
 	Close() error
 }
 
+// MetricsSlice тип для массива метрик.
+//
 //easyjson:json
 type MetricsSlice []Metrics
 
+// Metrics содержит информацию о метрике.
+//
 //easyjson:json
 type Metrics struct {
-	ID    string   `json:"id"`              // имя метрики
-	MType string   `json:"type"`            // параметр, принимающий значение gauge или counter
-	Delta *int64   `json:"delta,omitempty"` // значение метрики в случае передачи counter
-	Value *float64 `json:"value,omitempty"` // значение метрики в случае передачи gauge
+	ID    string   `json:"id"`              // имя метрики.
+	MType string   `json:"type"`            // параметр, принимающий значение gauge или counter.
+	Delta *int64   `json:"delta,omitempty"` // значение метрики в случае передачи counter.
+	Value *float64 `json:"value,omitempty"` // значение метрики в случае передачи gauge.
 }
 
+// Metric внутренняя структура метрики с типизированным значением.
 type Metric struct {
 	Name  string `json:"name"`
 	Value MetricValue
 }
 
+// MetricType тип метрики.
 type MetricType uint8
 
 const (
 	TypeUnknown MetricType = iota
 
-	TypeGauge
-	TypeCounter
+	TypeGauge   // Метрика типа gauge.
+	TypeCounter // Метрика типа counter.
 )
 
 var metricsTypeValues = map[string]MetricType{
@@ -57,10 +64,12 @@ var metricTypeString = []string{
 	"counter",
 }
 
+// String возвращает строковое представление типа метрики.
 func (m MetricType) String() string {
 	return metricTypeString[m]
 }
 
+// ParseMetricType парсит строковый тип метрики.
 func ParseMetricType(s string) MetricType {
 	if v, ok := metricsTypeValues[s]; ok {
 		return v
@@ -69,12 +78,14 @@ func ParseMetricType(s string) MetricType {
 	return TypeUnknown
 }
 
+// MetricValue хранит значение и тип метрики.
 type MetricValue struct {
 	Type    MetricType `json:"type"`
 	Gauge   float64    `json:"gauge,omitempty"`
 	Counter int64      `json:"counter,omitempty"`
 }
 
+// String возвращает строковое представление значения в зависимости от типа.
 func (mv MetricValue) String() string {
 	switch mv.Type {
 	case TypeGauge:
@@ -86,6 +97,7 @@ func (mv MetricValue) String() string {
 	}
 }
 
+// SetValue устанавливает строковое значение метрики в соответствии с типом.
 func (m *Metric) SetValue(s string) error {
 	switch m.Value.Type {
 	case TypeGauge:
@@ -104,6 +116,7 @@ func (m *Metric) SetValue(s string) error {
 	return nil
 }
 
+// Gauge создает новую gauge метрику с переданным значением.
 func Gauge(name string, value float64) Metric {
 	return Metric{
 		Name:  name,
@@ -111,6 +124,7 @@ func Gauge(name string, value float64) Metric {
 	}
 }
 
+// Gauge создает новую counter метрику с переданным значением.
 func Counter(name string, value int64) Metric {
 	return Metric{
 		Name:  name,

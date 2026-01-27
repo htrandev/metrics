@@ -10,55 +10,52 @@ import (
 	"github.com/htrandev/metrics/internal/handler/middleware"
 )
 
-func New(key string, logger *zap.Logger, handler *handler.MetricHandler) (*chi.Mux, error) {
+// New возвращает новый экземляр
+// 
+// Эндпоинты:
+//   - GET    / - получить все метрики
+//   - GET    /value/{{metricType}/{metricName} - получить значение метрики
+//   - POST   /update/{metricType}/{metricName}/{metricValue} - обновить метрику
+//   - POST   /update/ - обновить метрику в формате JSON
+//   - GET    /value/ - получить значение метрики в формате JSON
+//   - GET    /ping - проверка доступности БД
+//   - POST   /updates/ - обновить несколько метрик в формате JSON
+func New(key string, logger *zap.Logger, handler *handler.MetricHandler) *chi.Mux {
 	r := chi.NewRouter()
 
-	r.With(
-		middleware.MethodChecker(http.MethodGet),
-		middleware.Logger(logger),
-		middleware.Sign(key),
-		middleware.Compress(),
-	).Get("/", handler.GetAll)
+	var (
+		getMethodChecker  = middleware.MethodChecker(http.MethodGet)
+		postMethodChecker = middleware.MethodChecker(http.MethodPost)
 
-	r.With(
-		middleware.MethodChecker(http.MethodGet),
-		middleware.Logger(logger),
-		middleware.Sign(key),
-	).Get("/value/{metricType}/{metricName}", handler.Get)
+		l = middleware.Logger(logger)
 
-	r.With(
-		middleware.MethodChecker(http.MethodPost),
-		middleware.Logger(logger),
-		middleware.Sign(key),
-	).Post("/update/{metricType}/{metricName}/{metricValue}", handler.Update)
+		ct = middleware.ContentType()
 
-	r.With(
-		middleware.MethodChecker(http.MethodPost),
-		middleware.Logger(logger),
-		middleware.ContentType(),
-		middleware.Sign(key),
-		middleware.Compress(),
-	).Post("/update/", handler.UpdateJSON)
+		signer = middleware.Sign(key)
 
-	r.With(
-		middleware.MethodChecker(http.MethodPost),
-		middleware.Logger(logger),
-		middleware.ContentType(),
-		middleware.Sign(key),
-		middleware.Compress(),
-	).Post("/value/", handler.GetJSON)
+		compressor = middleware.Compress()
+	)
 
-	r.With(
-		middleware.MethodChecker(http.MethodGet),
-	).Get("/ping", handler.Ping)
+	r.With(getMethodChecker, l, signer, compressor).
+		Get("/", handler.GetAll)
 
-	r.With(
-		middleware.MethodChecker(http.MethodPost),
-		middleware.Logger(logger),
-		middleware.ContentType(),
-		middleware.Sign(key),
-		middleware.Compress(),
-	).Post("/updates/", handler.UpdateManyJSON)
+	r.With(getMethodChecker, l, signer).
+		Get("/value/{metricType}/{metricName}", handler.Get)
 
-	return r, nil
+	r.With(postMethodChecker, l, signer).
+		Post("/update/{metricType}/{metricName}/{metricValue}", handler.Update)
+
+	r.With(postMethodChecker, l, ct, signer, compressor).
+		Post("/update/", handler.UpdateJSON)
+
+	r.With(postMethodChecker, l, ct, signer, compressor).
+		Post("/value/", handler.GetJSON)
+
+	r.With(getMethodChecker).
+		Get("/ping", handler.Ping)
+
+	r.With(postMethodChecker, l, ct, signer, compressor).
+		Post("/updates/", handler.UpdateManyJSON)
+
+	return r
 }
