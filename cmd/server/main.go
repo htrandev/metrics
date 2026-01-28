@@ -19,6 +19,7 @@ import (
 
 	"github.com/htrandev/metrics/internal/audit"
 	"github.com/htrandev/metrics/internal/handler"
+	"github.com/htrandev/metrics/internal/info"
 	"github.com/htrandev/metrics/internal/model"
 	"github.com/htrandev/metrics/internal/repository/local"
 	"github.com/htrandev/metrics/internal/repository/postgres"
@@ -40,6 +41,8 @@ func main() {
 }
 
 func run() error {
+	info.PrintBuildInfo()
+
 	log.Println("init config")
 	flags, err := parseFlags()
 	if err != nil {
