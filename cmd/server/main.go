@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 
 	"github.com/htrandev/metrics/internal/audit"
 	"github.com/htrandev/metrics/internal/handler"
+	"github.com/htrandev/metrics/internal/info"
 	"github.com/htrandev/metrics/internal/model"
 	"github.com/htrandev/metrics/internal/repository/local"
 	"github.com/htrandev/metrics/internal/repository/postgres"
@@ -40,6 +42,8 @@ func main() {
 }
 
 func run() error {
+	info.PrintBuildInfo()
+
 	log.Println("init config")
 	flags, err := parseFlags()
 	if err != nil {
@@ -104,20 +108,27 @@ func run() error {
 	zl.Info("init router")
 	router := router.New(flags.key, zl, metricHandler)
 
-	srv := http.Server{
-		Addr:    flags.addr,
-		Handler: router,
-	}
+	wg := sync.WaitGroup{}
+	wg.Add(2) // debug and http servers
 
+	pprofSrv := http.Server{Addr: flags.pprofAddr}
 	go func() {
+		defer wg.Done()
+
 		zl.Info(fmt.Sprintf("start pprof on http://%s/debug/pprof/", flags.pprofAddr))
-		if err := http.ListenAndServe(flags.pprofAddr, nil); err != nil {
+		if err := pprofSrv.ListenAndServe(); err != nil {
 			log.Fatal(err)
 		}
 	}()
 
-	zl.Info("start serving", zap.String("addr", flags.addr))
+	srv := http.Server{
+		Addr:    flags.addr,
+		Handler: router,
+	}
 	go func() {
+		defer wg.Done()
+
+		zl.Info("start serving", zap.String("addr", flags.addr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("can't start server: %v", err)
 		}
@@ -128,10 +139,16 @@ func run() error {
 
 	<-stop
 
-	shutDownCtx, shutDownCancel := context.WithTimeout(ctx, 5*time.Second)
-	defer shutDownCancel()
+	wg.Wait()
 
-	if err := srv.Shutdown(shutDownCtx); err != nil {
+	shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer shutdownCancel()
+
+	if err := pprofSrv.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("shutdown pprof server: %w", err)
+	}
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown server: %w", err)
 	}
 	return nil

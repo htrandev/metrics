@@ -12,6 +12,7 @@ import (
 	"github.com/go-resty/resty/v2"
 
 	"github.com/htrandev/metrics/internal/agent"
+	"github.com/htrandev/metrics/internal/info"
 	"github.com/htrandev/metrics/internal/model"
 	"github.com/htrandev/metrics/pkg/logger"
 )
@@ -24,6 +25,8 @@ func main() {
 }
 
 func run() error {
+	info.PrintBuildInfo()
+
 	log.Println("init config")
 	conf, err := parseFlags()
 	if err != nil {

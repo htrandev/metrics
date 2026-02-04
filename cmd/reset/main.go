@@ -1,0 +1,238 @@
+package main
+
+import (
+	"bytes"
+	"fmt"
+	"go/ast"
+	"go/format"
+	"go/token"
+	"go/types"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"text/template"
+
+	"golang.org/x/tools/go/packages"
+)
+
+type Field struct {
+	Name      string
+	Type      types.Type
+	Zero      string
+	IsMap     bool
+	IsSlice   bool
+	IsPointer bool
+	HasReset  bool
+}
+
+type StructInfo struct {
+	Name   string
+	Fields []Field
+	Recv   string
+}
+
+var (
+	tmpl = template.Must(template.New("reset").Parse(genTemplate))
+)
+
+func main() {
+	cfg := &packages.Config{
+		Mode: packages.NeedName |
+			packages.NeedFiles |
+			packages.NeedCompiledGoFiles |
+			packages.NeedSyntax |
+			packages.NeedTypes |
+			packages.NeedTypesInfo |
+			packages.NeedDeps,
+	}
+
+	// Сканируем все пакеты
+	pkgs, err := packages.Load(cfg, "./...")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, pkg := range pkgs {
+		process(pkg)
+	}
+}
+
+func process(pkg *packages.Package) {
+	structs := make([]StructInfo, 0, 10)
+
+	for i, file := range pkg.Syntax {
+		f := pkg.CompiledGoFiles[i]
+
+		if strings.HasSuffix(f, ".gen.go") {
+			continue
+		}
+
+		ast.Inspect(file, func(n ast.Node) bool {
+			gen, ok := n.(*ast.GenDecl)
+			if !ok || gen.Tok != token.TYPE {
+				return true
+			}
+
+			if gen.Doc == nil {
+				return true
+			}
+
+			for _, comment := range gen.Doc.List {
+				if strings.TrimSpace(comment.Text) == "// generate:reset" {
+					for _, spec := range gen.Specs {
+						ts, ok := spec.(*ast.TypeSpec)
+						if !ok {
+							continue
+						}
+
+						if _, ok := ts.Type.(*ast.StructType); ok {
+							obj := pkg.Types.Scope().Lookup(ts.Name.Name)
+							if obj != nil {
+								info := extractStructInfo(ts.Name.Name, obj)
+								structs = append(structs, info)
+							}
+						}
+					}
+				}
+			}
+
+			return true
+		})
+	}
+
+	if len(structs) > 0 {
+		if err := generateResetFile(pkg, structs); err != nil {
+			log.Printf("error generating file in %s: %v", pkg.PkgPath, err)
+		}
+	}
+}
+
+func extractStructInfo(name string, obj types.Object) StructInfo {
+	recv := strings.ToLower(string(name[0]))
+	structType := obj.Type().Underlying().(*types.Struct)
+
+	var fields []Field
+	for field := range structType.Fields() {
+		ft := field.Type()
+
+		underlyingFT := deref(ft)
+		isPointer := ft != underlyingFT
+
+		var isSlice, isMap bool
+		switch underlyingFT.(type) {
+		case *types.Slice:
+			isSlice = true
+		case *types.Map:
+			isMap = true
+		}
+
+		hasReset := hasResetMethod(underlyingFT)
+		zero := ""
+		if !hasReset && !isSlice {
+			zero = getZeroValue(underlyingFT)
+		}
+		fields = append(fields, Field{
+			Name:      field.Name(),
+			Type:      ft,
+			Zero:      zero,
+			IsSlice:   isSlice,
+			HasReset:  hasReset,
+			IsPointer: isPointer,
+			IsMap:     isMap,
+		})
+	}
+
+	return StructInfo{
+		Name:   name,
+		Fields: fields,
+		Recv:   recv,
+	}
+}
+
+func hasResetMethod(t types.Type) bool {
+	named, ok := t.(*types.Named)
+	if !ok {
+		return false
+	}
+
+	for method := range named.Methods() {
+		if method.Name() == "Reset" {
+			sig, ok := method.Type().(*types.Signature)
+			if !ok {
+				continue
+			}
+
+			if sig.Params() == nil && sig.Results() == nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func getZeroValue(t types.Type) string {
+	switch u := t.Underlying().(type) {
+	case *types.Basic:
+		switch u.Kind() {
+		case types.Bool:
+			return "false"
+		case types.String:
+			return `""`
+		default:
+			return "0"
+		}
+	case *types.Interface, *types.Slice, *types.Map, *types.Chan:
+		return "nil"
+	case *types.Array:
+		var elemName string
+		switch named := u.Elem().(type) {
+		case *types.Named:
+			elemName = named.Obj().Name()
+		default:
+			elemName = u.Elem().String()
+		}
+		return fmt.Sprintf("[%d]%s{}", u.Len(), elemName)
+	case *types.Struct:
+		return fmt.Sprintf("%s{}", t.Underlying())
+	default:
+		return ""
+	}
+}
+
+func deref(t types.Type) types.Type {
+	if p, ok := t.(*types.Pointer); ok {
+		return p.Elem()
+	}
+	return t
+}
+
+var defaultResetFileName = "reset.gen.go"
+
+func generateResetFile(pkg *packages.Package, structs []StructInfo) error {
+	if len(pkg.CompiledGoFiles) == 0 {
+		return nil
+	}
+	dir := filepath.Dir(pkg.CompiledGoFiles[0])
+	filename := filepath.Join(dir, defaultResetFileName)
+
+	var buf bytes.Buffer
+	data := struct {
+		Package string
+		Structs []StructInfo
+	}{
+		Package: pkg.Name,
+		Structs: structs,
+	}
+
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return err
+	}
+
+	formatted, err := format.Source(buf.Bytes())
+	if err != nil {
+		return fmt.Errorf("formating: %w\n%s", err, buf.String())
+	}
+
+	return os.WriteFile(filename, formatted, 0644)
+}
