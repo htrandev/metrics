@@ -14,6 +14,7 @@ import (
 	"github.com/htrandev/metrics/internal/agent"
 	"github.com/htrandev/metrics/internal/info"
 	"github.com/htrandev/metrics/internal/model"
+	"github.com/htrandev/metrics/pkg/crypto"
 	"github.com/htrandev/metrics/pkg/logger"
 )
 
@@ -46,11 +47,18 @@ func run() error {
 	zl.Info("init collection")
 	collection := model.NewCollection()
 
+	zl.Info("init public key")
+	publicKey, err := crypto.PublicKey(conf.publicKeyFile)
+	if err != nil {
+		return fmt.Errorf("init public key: %w", err)
+	}
+
 	zl.Info("init agent")
 	agent := agent.New(&agent.AgentOptions{
 		Addr:           conf.addr,
-		Key:            conf.key,
+		Signature:      conf.signature,
 		MaxRetry:       conf.maxRetry,
+		Key:            publicKey,
 		Logger:         zl,
 		Client:         client,
 		Collector:      collection,

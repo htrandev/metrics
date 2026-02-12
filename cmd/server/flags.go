@@ -9,17 +9,18 @@ import (
 )
 
 type flags struct {
-	addr          string
-	logLvl        string
-	storeInterval time.Duration
-	filePath      string
-	restore       bool
-	databaseDsn   string
-	maxRetry      int
-	key           string
-	auditFile     string
-	auditURL      string
-	pprofAddr     string
+	addr           string
+	logLvl         string
+	storeInterval  time.Duration
+	filePath       string
+	restore        bool
+	databaseDsn    string
+	maxRetry       int
+	key            string
+	auditFile      string
+	auditURL       string
+	pprofAddr      string
+	privateKeyFile string
 }
 
 func parseFlags() (flags, error) {
@@ -37,6 +38,7 @@ func parseFlags() (flags, error) {
 	flag.StringVar(&f.auditFile, "audit-file", "", "file path to save audit")
 	flag.StringVar(&f.auditURL, "audit-url", "", "url to send audit")
 	flag.StringVar(&f.pprofAddr, "pprod-addr", "localhost:6060", "pprof address")
+	flag.StringVar(&f.privateKeyFile, "crypto-key", "", "path to private key file")
 
 	flag.Parse()
 
@@ -95,6 +97,10 @@ func parseFlags() (flags, error) {
 
 	if pprofAddr := os.Getenv("PPROF_ADDRESS"); pprofAddr != "" {
 		f.pprofAddr = pprofAddr
+	}
+
+	if privateKeyFile := os.Getenv("CRYPTO_KEY"); privateKeyFile != "" {
+		f.privateKeyFile = privateKeyFile
 	}
 
 	return f, nil

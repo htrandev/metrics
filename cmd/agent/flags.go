@@ -14,8 +14,9 @@ type config struct {
 	pollInterval   time.Duration
 	logLvl         string
 	maxRetry       int
-	key            string
+	signature      string
 	rateLimit      int
+	publicKeyFile  string
 }
 
 func parseFlags() (*config, error) {
@@ -28,8 +29,9 @@ func parseFlags() (*config, error) {
 	flag.IntVar(&poll, "p", 2, "poll interval in seconds")
 	flag.StringVar(&c.logLvl, "lvl", "debug", "log level")
 	flag.IntVar(&c.maxRetry, "maxRetry", 3, "max number of retries")
-	flag.StringVar(&c.key, "k", "", "secret key")
+	flag.StringVar(&c.signature, "k", "", "secret key")
 	flag.IntVar(&c.rateLimit, "l", 3, "agent rate limit")
+	flag.StringVar(&c.publicKeyFile, "crypto-key", "", "path to public key file")
 
 	flag.Parse()
 
@@ -67,7 +69,7 @@ func parseFlags() (*config, error) {
 	}
 
 	if key := os.Getenv("KEY"); key != "" {
-		c.key = key
+		c.signature = key
 	}
 
 	if rateLimit := os.Getenv("RATE_LIMIT"); rateLimit != "" {
@@ -76,6 +78,10 @@ func parseFlags() (*config, error) {
 			return nil, fmt.Errorf("parse rate limit: %w", err)
 		}
 		c.rateLimit = v
+	}
+
+	if publicKeyFile := os.Getenv("CRYPTO_KEY"); publicKeyFile != "" {
+		c.publicKeyFile = publicKeyFile
 	}
 
 	return &c, nil

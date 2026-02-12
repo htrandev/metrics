@@ -1,6 +1,7 @@
 package router
 
 import (
+	"crypto/rsa"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -11,7 +12,7 @@ import (
 )
 
 // New возвращает новый экземляр
-// 
+//
 // Эндпоинты:
 //   - GET    / - получить все метрики
 //   - GET    /value/{{metricType}/{metricName} - получить значение метрики
@@ -20,7 +21,7 @@ import (
 //   - GET    /value/ - получить значение метрики в формате JSON
 //   - GET    /ping - проверка доступности БД
 //   - POST   /updates/ - обновить несколько метрик в формате JSON
-func New(key string, logger *zap.Logger, handler *handler.MetricHandler) *chi.Mux {
+func New(signature string, key *rsa.PrivateKey, logger *zap.Logger, handler *handler.MetricHandler) *chi.Mux {
 	r := chi.NewRouter()
 
 	var (
@@ -31,9 +32,11 @@ func New(key string, logger *zap.Logger, handler *handler.MetricHandler) *chi.Mu
 
 		ct = middleware.ContentType()
 
-		signer = middleware.Sign(key)
+		signer = middleware.Sign(signature)
 
 		compressor = middleware.Compress()
+
+		rsa = middleware.RSA(key)
 	)
 
 	r.With(getMethodChecker, l, signer, compressor).
@@ -54,7 +57,7 @@ func New(key string, logger *zap.Logger, handler *handler.MetricHandler) *chi.Mu
 	r.With(getMethodChecker).
 		Get("/ping", handler.Ping)
 
-	r.With(postMethodChecker, l, ct, signer, compressor).
+	r.With(postMethodChecker, l, ct, rsa, signer, compressor).
 		Post("/updates/", handler.UpdateManyJSON)
 
 	return r

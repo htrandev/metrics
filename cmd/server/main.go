@@ -27,6 +27,7 @@ import (
 	"github.com/htrandev/metrics/internal/router"
 	"github.com/htrandev/metrics/internal/service/metrics"
 	"github.com/htrandev/metrics/migrations"
+	"github.com/htrandev/metrics/pkg/crypto"
 	"github.com/htrandev/metrics/pkg/logger"
 
 	_ "net/http/pprof"
@@ -105,8 +106,14 @@ func run() error {
 	zl.Info("init handler")
 	metricHandler := handler.NewMetricsHandler(zl, metricService, auditor)
 
+	zl.Info("init private key")
+	privateKey, err := crypto.PrivateKey(flags.privateKeyFile)
+	if err != nil {
+		return fmt.Errorf("init private key: %w", err)
+	}
+
 	zl.Info("init router")
-	router := router.New(flags.key, zl, metricHandler)
+	router := router.New(flags.key, privateKey, zl, metricHandler)
 
 	wg := sync.WaitGroup{}
 	wg.Add(2) // debug and http servers
