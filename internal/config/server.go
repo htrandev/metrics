@@ -88,6 +88,9 @@ func (s *Server) applyServerConfig(cfg *serverConfigFromFile) error {
 	}
 	s.StoreFilePath = selectStringValue("FILE_STORAGE_PATH", storeFilePath, cfg.StoreFilePath)
 	s.Restore, err = selectBoolVal("RESTORE", restore, cfg.Restore)
+	if err != nil {
+		return err
+	}
 	s.DatabaseDsn = selectStringValue("DATABASE_DSN", databaseDsn, cfg.DatabaseDsn)
 	s.MaxRetry, err = selectIntVal("MAX_RETRY", *maxRetry, cfg.MaxRetry)
 	if err != nil {
