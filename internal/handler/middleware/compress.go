@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+
+	"go.uber.org/zap"
 )
 
 var (
@@ -95,7 +97,7 @@ func (c *compressReader) Close() error {
 }
 
 // Compress возвращает HTTP middleware для автоматического сжатия ответов gzip.
-func Compress() func(next http.Handler) http.Handler {
+func Compress(logger *zap.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ow := w
@@ -113,6 +115,11 @@ func Compress() func(next http.Handler) http.Handler {
 			if sendsGzip {
 				cr, err := newCompressReader(r.Body)
 				if err != nil {
+					logger.Error("read body",
+						zap.Error(err),
+						zap.String("scope", "middleware"),
+						zap.String("method", "compress"),
+					)
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}

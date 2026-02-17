@@ -8,11 +8,14 @@ import (
 )
 
 var (
-	privateKeyFile = filepath.Join("testdata", "test.rsa")
-	publicKeyFile  = filepath.Join("testdata", "test.rsa.pub")
+	privateKeyFile = filepath.Join("testdata", "private.pem")
+	publicKeyFile  = filepath.Join("testdata", "public.pem")
 )
 
 func TestRsa(t *testing.T) {
+	err := Generate("testdata")
+	require.NoError(t, err)
+
 	privateKey, err := PrivateKey(privateKeyFile)
 	require.NoError(t, err)
 	require.NotNil(t, privateKey)

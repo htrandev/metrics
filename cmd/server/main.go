@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/pressly/goose/v3"
 	"github.com/pressly/goose/v3/database"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/htrandev/metrics/internal/audit"
 	"github.com/htrandev/metrics/internal/config"
@@ -58,7 +58,7 @@ func run() error {
 		return fmt.Errorf("init logger: %w", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 	defer cancel()
 
 	zl.Info("init storage")
@@ -116,49 +116,39 @@ func run() error {
 	zl.Info("init router")
 	router := router.New(cfg.Signature, privateKey, zl, metricHandler)
 
-	wg := sync.WaitGroup{}
-	wg.Add(2) // debug and http servers
+	group := errgroup.Group{}
 
 	pprofSrv := http.Server{Addr: cfg.PprofAddr}
-	go func() {
-		defer wg.Done()
-
-		zl.Info(fmt.Sprintf("start pprof on http://%s/debug/pprof/", cfg.PprofAddr))
+	group.Go(func() error {
+		zl.Info("starting pprof on /debug/pprof/", zap.String("server-address", cfg.PprofAddr))
 		if err := pprofSrv.ListenAndServe(); err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("starting pprof server: %w", err)
 		}
-	}()
+		return nil
+	})
 
 	srv := http.Server{
 		Addr:    cfg.Addr,
 		Handler: router,
 	}
-	go func() {
-		defer wg.Done()
-
+	group.Go(func() error {
 		zl.Info("start serving", zap.String("addr", cfg.Addr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("can't start server: %v", err)
+			return fmt.Errorf("can't start server: %v", err)
 		}
-	}()
+		return nil
+	})
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
+	if err := group.Wait(); err != nil {
+		if err := pprofSrv.Shutdown(ctx); err != nil {
+			return fmt.Errorf("shutdown pprof server: %w", err)
+		}
 
-	<-stop
-
-	wg.Wait()
-
-	shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 5*time.Second)
-	defer shutdownCancel()
-
-	if err := pprofSrv.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("shutdown pprof server: %w", err)
+		if err := srv.Shutdown(ctx); err != nil {
+			return fmt.Errorf("shutdown server: %w", err)
+		}
 	}
 
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("shutdown server: %w", err)
-	}
 	return nil
 }
 

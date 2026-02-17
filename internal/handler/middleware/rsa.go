@@ -6,10 +6,12 @@ import (
 	"io"
 	"net/http"
 
+	"go.uber.org/zap"
+
 	"github.com/htrandev/metrics/pkg/crypto"
 )
 
-func RSA(key *rsa.PrivateKey) func(next http.Handler) http.Handler {
+func RSA(key *rsa.PrivateKey, logger *zap.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if key == nil {
@@ -22,6 +24,11 @@ func RSA(key *rsa.PrivateKey) func(next http.Handler) http.Handler {
 
 			var buf bytes.Buffer
 			if _, err := buf.ReadFrom(r.Body); err != nil {
+				logger.Error("read body",
+					zap.Error(err),
+					zap.String("scope", "middleware"),
+					zap.String("method", "rsa"),
+				)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}

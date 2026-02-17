@@ -32,11 +32,11 @@ func New(signature string, key *rsa.PrivateKey, logger *zap.Logger, handler *han
 
 		ct = middleware.ContentType()
 
-		signer = middleware.Sign(signature)
+		signer = middleware.Sign(signature, logger)
 
-		compressor = middleware.Compress()
+		compressor = middleware.Compress(logger)
 
-		rsa = middleware.RSA(key)
+		rsa = middleware.RSA(key, logger)
 	)
 
 	r.With(getMethodChecker, l, signer, compressor).

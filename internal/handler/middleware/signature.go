@@ -7,10 +7,11 @@ import (
 	"net/http"
 
 	"github.com/htrandev/metrics/pkg/sign"
+	"go.uber.org/zap"
 )
 
 // Sign возвращает HTTP middleware для проверки подписи запросов.
-func Sign(key string) func(next http.Handler) http.Handler {
+func Sign(key string, logger *zap.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			rw := &responseWriter{
@@ -30,6 +31,11 @@ func Sign(key string) func(next http.Handler) http.Handler {
 
 			var buf bytes.Buffer
 			if _, err := buf.ReadFrom(r.Body); err != nil {
+				logger.Error("read body",
+					zap.Error(err),
+					zap.String("scope", "middleware"),
+					zap.String("method", "sign"),
+				)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}

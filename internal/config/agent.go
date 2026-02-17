@@ -1,10 +1,12 @@
 package config
 
 import (
-	"flag"
 	"fmt"
-	"log"
+	"os"
 	"time"
+
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
 type Agent struct {
@@ -18,74 +20,64 @@ type Agent struct {
 	PublicKeyFile  string        `env:"crypto_key"`
 }
 
-type agentConfigFromFile struct {
-	Addr           string        `json:"address"`
-	ReportInterval time.Duration `json:"report_interval"`
-	PollInterval   time.Duration `json:"poll_interval"`
-	LogLvl         string        `json:"log_level"`
-	MaxRetry       int           `json:"max_retry"`
-	Signature      string        `json:"signature"`
-	RateLimit      int           `json:"rate_limit"`
-	PublicKeyFile  string        `json:"crypto_key"`
-}
-
 // GetAgentConfig return a server configuration.
 func GetAgentConfig() (Agent, error) {
-	var a Agent
+	v := viper.New()
 
-	if configPath := getConfigFilePath(); configPath != "" {
-		var cfg *agentConfigFromFile
-		err := loadConfFromFile(configPath, cfg)
-		if err != nil {
-			log.Printf("can't read env from file [%s]: %v\n", configPath, err)
-		} else {
-			err := a.applyAgentConfig(cfg)
-			if err != nil {
-				return a, fmt.Errorf("apply agent config: %w", err)
-			}
+	filepath := getConfigFilePath()
+	v.SetConfigFile(filepath)
+
+	if err := v.ReadInConfig(); err != nil {
+		return Agent{}, fmt.Errorf("load config file: %w", err)
+	}
+
+	flagVals := parseAgentFlags(v)
+
+	v.AutomaticEnv()
+
+	for key := range flagVals {
+		if envVal, exists := os.LookupEnv(key); exists {
+			v.Set(key, envVal)
 		}
+	}
+
+	var a Agent
+	if err := v.Unmarshal(&a); err != nil {
+		return Agent{}, fmt.Errorf("unmarshal config: %w", err)
 	}
 
 	return a, nil
 }
 
-// applyAgentConfig set server env value
-//
-// priority order: env -> flag -> config file.
-func (a *Agent) applyAgentConfig(cfg *agentConfigFromFile) error {
-	var err error
+func parseAgentFlags(v *viper.Viper) map[string]any {
+	var (
+		addr          = pflag.String("a", "localhost:8080", "address to run server")
+		report        = pflag.Int("r", 10, "report interval in seconds")
+		poll          = pflag.Int("p", 2, "poll interval in seconds")
+		logLvl        = pflag.String("lvl", "debug", "log level")
+		maxRetry      = pflag.Int("maxRetry", 3, "max number of retries")
+		signature     = pflag.String("k", "", "secret key")
+		rateLimit     = pflag.Int("l", 3, "agent rate limit")
+		publicKeyFile = pflag.String("crypto-key", "", "path to public key file")
+	)
 
-	addr := flag.String("a", "localhost:8080", "address to run server")
-	report := flag.Int("r", 10, "report interval in seconds")
-	poll := flag.Int("p", 2, "poll interval in seconds")
-	logLvl := flag.String("lvl", "debug", "log level")
-	maxRetry := flag.Int("maxRetry", 3, "max number of retries")
-	signature := flag.String("k", "", "secret key")
-	rateLimit := flag.Int("l", 3, "agent rate limit")
-	publicKeyFile := flag.String("crypto-key", "", "path to public key file")
+	pflag.Parse()
 
-	flag.Parse()
+	flagVals := map[string]any{
+		"ADDRESS":         *addr,
+		"REPORT_INTERVAL": *report,
+		"POLL_INTERVAL":   *poll,
+		"LOG_LEVEL":       *logLvl,
+		"MAX_RETRY":       *maxRetry,
+		"SIGNATURE":       *signature,
+		"RATE_LIMIT":      *rateLimit,
+		"CRYPTO_KEY":      *publicKeyFile,
+	}
+	for key, val := range flagVals {
+		if val != nil {
+			v.Set(key, val)
+		}
+	}
 
-	a.Addr = selectStringValue("ADDRESS", addr, cfg.Addr)
-	a.ReportInterval, err = selectTimeDurationVal("REPORT_INTERVAL", *report, cfg.ReportInterval)
-	if err != nil {
-		return err
-	}
-	a.PollInterval, err = selectTimeDurationVal("POLL_INTERVAL", *poll, cfg.PollInterval)
-	if err != nil {
-		return err
-	}
-	a.LogLvl = selectStringValue("LOG_LEVEL", logLvl, cfg.LogLvl)
-	a.MaxRetry, err = selectIntVal("MAX_RETRY", *maxRetry, cfg.MaxRetry)
-	if err != nil {
-		return err
-	}
-	a.Signature = selectStringValue("SIGNATURE", signature, cfg.Signature)
-	a.RateLimit, err = selectIntVal("RATE_LIMIT", *rateLimit, cfg.RateLimit)
-	if err != nil {
-		return err
-	}
-	a.PublicKeyFile = selectStringValue("CRYPTO_KEY", publicKeyFile, cfg.PublicKeyFile)
-
-	return nil
+	return flagVals
 }

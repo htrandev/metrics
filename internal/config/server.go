@@ -1,106 +1,99 @@
 package config
 
 import (
-	"flag"
 	"fmt"
-	"log"
+	"os"
 	"time"
+
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
-// Server represents server configuration
+// Server represents server configuration.
 type Server struct {
-	Addr           string        `env:"address"`
-	LogLvl         string        `env:"log_level"`
-	StoreInterval  time.Duration `env:"store_interval"`
-	StoreFilePath  string        `env:"store_file"`
-	Restore        bool          `env:"restore"`
-	DatabaseDsn    string        `env:"database_dsn"`
-	MaxRetry       int           `env:"max_retry"`
-	Signature      string        `env:"signature"`
-	AuditFile      string        `env:"audit_file"`
-	AuditURL       string        `env:"audit_url"`
-	PprofAddr      string        `env:"pprof_address"`
-	PrivateKeyFile string        `env:"crypto_key"`
-}
-
-// serverConfigFromFile represents configuration from file
-type serverConfigFromFile struct {
-	Addr           string        `json:"address"`
-	LogLvl         string        `json:"log_level"`
-	StoreInterval  time.Duration `json:"store_interval"`
-	StoreFilePath  string        `json:"store_file"`
-	Restore        bool          `json:"restore"`
-	DatabaseDsn    string        `json:"database_dsn"`
-	MaxRetry       int           `json:"max_retry"`
-	Signature      string        `json:"signature"`
-	AuditFile      string        `json:"audit_file"`
-	AuditURL       string        `json:"audit_url"`
-	PprofAddr      string        `json:"pprof_address"`
-	PrivateKeyFile string        `json:"crypto_key"`
+	Addr           string        `mapstructure:"ADDRESS"`
+	LogLvl         string        `mapstructure:"LOG_LEVEL"`
+	StoreInterval  time.Duration `mapstructure:"STORE_INTERVAL"`
+	StoreFilePath  string        `mapstructure:"STORE_FILE"`
+	Restore        bool          `mapstructure:"RESTORE"`
+	DatabaseDsn    string        `mapstructure:"DATABASE_DSN"`
+	MaxRetry       int           `mapstructure:"MAX_RETRY"`
+	Signature      string        `mapstructure:"SIGNATURE"`
+	AuditFile      string        `mapstructure:"AUDIT_FILE"`
+	AuditURL       string        `mapstructure:"AUDIT_URL"`
+	PprofAddr      string        `mapstructure:"PPROF_ADDRESS"`
+	PrivateKeyFile string        `mapstructure:"CRYPTO_KEY"`
 }
 
 // GetServerConfig return a server configuration.
 func GetServerConfig() (Server, error) {
-	var s Server
+	v := viper.New()
 
-	if configPath := getConfigFilePath(); configPath != "" {
-		var cfg *serverConfigFromFile
-		err := loadConfFromFile(configPath, cfg)
-		if err != nil {
-			log.Printf("can't read env from file [%s]: %v\n", configPath, err)
-		} else {
-			err := s.applyServerConfig(cfg)
-			if err != nil {
-				return s, fmt.Errorf("apply server config: %w", err)
-			}
+	filepath := getConfigFilePath()
+	v.SetConfigFile(filepath)
+
+	if err := v.ReadInConfig(); err != nil {
+		return Server{}, fmt.Errorf("load config file: %w", err)
+	}
+
+	flagVals := parseServerFlags(v)
+
+	v.AutomaticEnv()
+
+	for key := range flagVals {
+		if envVal, exists := os.LookupEnv(key); exists {
+			v.Set(key, envVal)
 		}
 	}
 
+	var s Server
+	if err := v.Unmarshal(&s); err != nil {
+		return Server{}, fmt.Errorf("unmarshal config: %w", err)
+	}
+
+	fmt.Printf("s: %+v\n", s)
 	return s, nil
 }
 
-// applyServerConfig set server env value
-//
-// priority order: env -> flag -> config file.
-func (s *Server) applyServerConfig(cfg *serverConfigFromFile) error {
-	var err error
+// parseServerFlags parse server flags.
+func parseServerFlags(v *viper.Viper) map[string]any {
+	var (
+		addr           = pflag.String("a", "localhost:8080", "address to run server")
+		logLvl         = pflag.String("lvl", "debug", "log level")
+		storeInterval  = pflag.Int("i", 300, "interval of writeing metrics")
+		storeFilePath  = pflag.String("f", "metrics.log", "path to file to write metrics")
+		restore        = pflag.Bool("r", false, "restore previous metrics")
+		databaseDsn    = pflag.String("d", "", "db dsn")
+		maxRetry       = pflag.Int("maxRetry", 3, "pg max retry")
+		signature      = pflag.String("k", "", "secret key")
+		auditFile      = pflag.String("audit-file", "", "file path to save audit")
+		auditURL       = pflag.String("audit-url", "", "url to send audit")
+		pprofAddr      = pflag.String("pprof-addr", "localhost:6060", "pprof address")
+		privateKeyFile = pflag.String("crypto-key", "", "path to private key file")
+	)
+	pflag.Parse()
 
-	addr := flag.String("a", "localhost:8080", "address to run server")
-	logLvl := flag.String("lvl", "debug", "log level")
-	storeInterval := flag.Int("i", 300, "interval of writeing metrics")
-	storeFilePath := flag.String("f", "metrics.log", "path to file to write metrics")
-	restore := flag.Bool("r", false, "restore previous metrics")
-	databaseDsn := flag.String("d", "", "db dsn")
-	maxRetry := flag.Int("maxRetry", 3, "pg max retry")
-	signature := flag.String("k", "", "secret key")
-	auditFile := flag.String("audit-file", "", "file path to save audit")
-	auditURL := flag.String("audit-url", "", "url to send audit")
-	pprofAddr := flag.String("pprod-addr", "localhost:6060", "pprof address")
-	privateKeyFile := flag.String("crypto-key", "", "path to private key file")
-
-	flag.Parse()
-
-	s.Addr = selectStringValue("ADDRESS", addr, cfg.Addr)
-	s.LogLvl = selectStringValue("LOG_LEVEL", logLvl, cfg.LogLvl)
-	s.StoreInterval, err = selectTimeDurationVal("STORE_INTERVAL", *storeInterval, cfg.StoreInterval)
-	if err != nil {
-		return err
+	// store flag values in a map for later merging
+	flagVals := map[string]any{
+		"ADDRESS":        *addr,
+		"LOG_LEVEL":      *logLvl,
+		"STORE_INTERVAL": *storeInterval,
+		"STORE_FILE":     *storeFilePath,
+		"RESTORE":        *restore,
+		"DATABASE_DSN":   *databaseDsn,
+		"MAX_RETRY":      *maxRetry,
+		"SIGNATURE":      *signature,
+		"AUDIT_FILE":     *auditFile,
+		"AUDIT_URL":      *auditURL,
+		"PPROF_ADDRESS":  *pprofAddr,
+		"CRYPTO_KEY":     *privateKeyFile,
 	}
-	s.StoreFilePath = selectStringValue("FILE_STORAGE_PATH", storeFilePath, cfg.StoreFilePath)
-	s.Restore, err = selectBoolVal("RESTORE", restore, cfg.Restore)
-	if err != nil {
-		return err
-	}
-	s.DatabaseDsn = selectStringValue("DATABASE_DSN", databaseDsn, cfg.DatabaseDsn)
-	s.MaxRetry, err = selectIntVal("MAX_RETRY", *maxRetry, cfg.MaxRetry)
-	if err != nil {
-		return err
-	}
-	s.Signature = selectStringValue("SIGNATURE", signature, cfg.Signature)
-	s.AuditFile = selectStringValue("AUDIT_FILE", auditFile, cfg.AuditFile)
-	s.AuditURL = selectStringValue("AUDIT_URL", auditURL, cfg.AuditURL)
-	s.PprofAddr = selectStringValue("PPROF_ADDRESS", pprofAddr, cfg.PprofAddr)
-	s.PrivateKeyFile = selectStringValue("CRYPTO_KEY", privateKeyFile, cfg.PrivateKeyFile)
 
-	return nil
+	for key, val := range flagVals {
+		if val != nil {
+			v.Set(key, val)
+		}
+	}
+
+	return flagVals
 }
