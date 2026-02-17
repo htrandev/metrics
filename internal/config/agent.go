@@ -10,14 +10,14 @@ import (
 )
 
 type Agent struct {
-	Addr           string        `env:"address"`
-	ReportInterval time.Duration `env:"report_interval"`
-	PollInterval   time.Duration `env:"poll_interval"`
-	LogLvl         string        `env:"log_level"`
-	MaxRetry       int           `env:"max_retry"`
-	Signature      string        `env:"signature"`
-	RateLimit      int           `env:"rate_limit"`
-	PublicKeyFile  string        `env:"crypto_key"`
+	Addr           string        `mapstructure:"ADDRESS"`
+	ReportInterval time.Duration `mapstructure:"REPORT_INTERVAL"`
+	PollInterval   time.Duration `mapstructure:"POLL_INTERVAL"`
+	LogLvl         string        `mapstructure:"LOG_LEVEL"`
+	MaxRetry       int           `mapstructure:"MAX_RETRY"`
+	Signature      string        `mapstructure:"SIGNATURE"`
+	RateLimit      int           `mapstructure:"RATE_LIMIT"`
+	PublicKeyFile  string        `mapstructure:"CRYPTO_KEY"`
 }
 
 // GetAgentConfig return a server configuration.
