@@ -51,7 +51,6 @@ func GetServerConfig() (Server, error) {
 		return Server{}, fmt.Errorf("unmarshal config: %w", err)
 	}
 
-	fmt.Printf("s: %+v\n", s)
 	return s, nil
 }
 
