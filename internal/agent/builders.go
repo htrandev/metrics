@@ -9,7 +9,34 @@ import (
 	"github.com/mailru/easyjson"
 
 	"github.com/htrandev/metrics/internal/model"
+	"github.com/htrandev/metrics/pkg/crypto"
 )
+
+func (a *Agent) buildManyBody(metrics model.MetricsSlice) ([]byte, error) {
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+
+	p, err := easyjson.Marshal(metrics)
+	if err != nil {
+		return nil, fmt.Errorf("buildManyBody: can't marshal metrics: %w", err)
+	}
+
+	if a.opts.Key != nil {
+		encrypted, err := crypto.Encrypt(a.opts.Key, p)
+		if err != nil {
+			return nil, fmt.Errorf("buildManyBody: encrypt body: %w", err)
+		}
+		p = encrypted
+	}
+
+	_, err = gz.Write(p)
+	if err != nil {
+		return nil, fmt.Errorf("buildManyBody: can't write: %w", err)
+	}
+
+	gz.Close()
+	return buf.Bytes(), nil
+}
 
 func buildSingleRequest(metric model.Metric) model.Metrics {
 	m := model.Metrics{
@@ -48,23 +75,6 @@ func buildSingleBody(m model.Metrics) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("buildSingleBody: can't write: %w", err)
 	}
-	gz.Close()
-	return buf.Bytes(), nil
-}
-
-func buildManyBody(metrics model.MetricsSlice) ([]byte, error) {
-	var buf bytes.Buffer
-	gz := gzip.NewWriter(&buf)
-
-	p, err := easyjson.Marshal(metrics)
-	if err != nil {
-		return nil, fmt.Errorf("buildManyBody: can't marshal metrics: %w", err)
-	}
-	_, err = gz.Write(p)
-	if err != nil {
-		return nil, fmt.Errorf("buildManyBody: can't write: %w", err)
-	}
-
 	gz.Close()
 	return buf.Bytes(), nil
 }

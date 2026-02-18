@@ -52,7 +52,7 @@ func Example() {
 	)
 
 	// инициализируем роутер
-	router := New("", logger, handler)
+	router := New("", nil, logger, handler)
 
 	// инициализируем сервис
 	srv := http.Server{

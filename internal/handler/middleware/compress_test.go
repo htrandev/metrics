@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 func TestCompress(t *testing.T) {
@@ -15,6 +16,8 @@ func TestCompress(t *testing.T) {
 		acceptEncoding  string = "Accept-Encoding"
 		contentEncoding string = "Content-Encoding"
 	)
+
+	logger := zap.NewNop()
 
 	body := `{"test": "compress"}`
 
@@ -68,7 +71,7 @@ func TestCompress(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
 
-			wrapper := Compress()
+			wrapper := Compress(logger)
 			wrapper(dummyHandler).ServeHTTP(rec, tc.req)
 
 			require.Equal(t, tc.expectedStatus, rec.Code)

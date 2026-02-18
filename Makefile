@@ -33,3 +33,6 @@ gofmt:
 .PHONY: goimports
 goimports:
 	@goimports -w -local github.com/htrandev/metrics .
+
+generate.keys:
+	@go run ./cmd/keygen...

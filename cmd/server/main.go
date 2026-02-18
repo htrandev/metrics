@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -17,8 +16,10 @@ import (
 	"github.com/pressly/goose/v3"
 	"github.com/pressly/goose/v3/database"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/htrandev/metrics/internal/audit"
+	"github.com/htrandev/metrics/internal/config"
 	"github.com/htrandev/metrics/internal/handler"
 	"github.com/htrandev/metrics/internal/info"
 	"github.com/htrandev/metrics/internal/model"
@@ -27,6 +28,7 @@ import (
 	"github.com/htrandev/metrics/internal/router"
 	"github.com/htrandev/metrics/internal/service/metrics"
 	"github.com/htrandev/metrics/migrations"
+	"github.com/htrandev/metrics/pkg/crypto"
 	"github.com/htrandev/metrics/pkg/logger"
 
 	_ "net/http/pprof"
@@ -45,22 +47,22 @@ func run() error {
 	info.PrintBuildInfo()
 
 	log.Println("init config")
-	flags, err := parseFlags()
+	cfg, err := config.GetServerConfig()
 	if err != nil {
-		return fmt.Errorf("parse flags: %w", err)
+		return fmt.Errorf("get server config: %w", err)
 	}
 
 	log.Println("init logger")
-	zl, err := logger.NewZapLogger(flags.logLvl)
+	zl, err := logger.NewZapLogger(cfg.LogLvl)
 	if err != nil {
 		return fmt.Errorf("init logger: %w", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 	defer cancel()
 
 	zl.Info("init storage")
-	storage, err := newStorage(ctx, flags, zl)
+	storage, err := newStorage(ctx, cfg, zl)
 	if err != nil {
 		return fmt.Errorf("init storage: %w", err)
 	}
@@ -78,10 +80,10 @@ func run() error {
 	zl.Info("init subscribers")
 	subs := make([]audit.Observer, 0, 2)
 
-	if flags.auditFile != "" {
+	if cfg.AuditFile != "" {
 		zl.Info("init file auditor")
 		flag := os.O_RDWR | os.O_CREATE | os.O_APPEND
-		f, err := os.OpenFile(flags.auditFile, flag, 0664)
+		f, err := os.OpenFile(cfg.AuditFile, flag, 0664)
 		if err != nil {
 			return fmt.Errorf("open audit file: %w", err)
 		}
@@ -90,12 +92,12 @@ func run() error {
 		subs = append(subs, fileAudit)
 	}
 
-	if flags.auditURL != "" {
+	if cfg.AuditURL != "" {
 		zl.Info("init url auditor")
 		auditClient := resty.New().
 			SetTimeout(30 * time.Second)
 
-		urlAudit := audit.NewURL(uuid.New(), flags.auditURL, auditClient, zl)
+		urlAudit := audit.NewURL(uuid.New(), cfg.AuditURL, auditClient, zl)
 		subs = append(subs, urlAudit)
 	}
 
@@ -105,66 +107,62 @@ func run() error {
 	zl.Info("init handler")
 	metricHandler := handler.NewMetricsHandler(zl, metricService, auditor)
 
+	zl.Info("init private key")
+	privateKey, err := crypto.PrivateKey(cfg.PrivateKeyFile)
+	if err != nil {
+		return fmt.Errorf("init private key: %w", err)
+	}
+
 	zl.Info("init router")
-	router := router.New(flags.key, zl, metricHandler)
+	router := router.New(cfg.Signature, privateKey, zl, metricHandler)
 
-	wg := sync.WaitGroup{}
-	wg.Add(2) // debug and http servers
+	group := errgroup.Group{}
 
-	pprofSrv := http.Server{Addr: flags.pprofAddr}
-	go func() {
-		defer wg.Done()
-
-		zl.Info(fmt.Sprintf("start pprof on http://%s/debug/pprof/", flags.pprofAddr))
+	pprofSrv := http.Server{Addr: cfg.PprofAddr}
+	group.Go(func() error {
+		zl.Info("starting pprof on /debug/pprof/", zap.String("server-address", cfg.PprofAddr))
 		if err := pprofSrv.ListenAndServe(); err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("starting pprof server: %w", err)
 		}
-	}()
+		return nil
+	})
 
 	srv := http.Server{
-		Addr:    flags.addr,
+		Addr:    cfg.Addr,
 		Handler: router,
 	}
-	go func() {
-		defer wg.Done()
-
-		zl.Info("start serving", zap.String("addr", flags.addr))
+	group.Go(func() error {
+		zl.Info("start serving", zap.String("addr", cfg.Addr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("can't start server: %v", err)
+			return fmt.Errorf("can't start server: %v", err)
 		}
-	}()
+		return nil
+	})
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
+	if err := group.Wait(); err != nil {
+		if err := pprofSrv.Shutdown(ctx); err != nil {
+			return fmt.Errorf("shutdown pprof server: %w", err)
+		}
 
-	<-stop
-
-	wg.Wait()
-
-	shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 5*time.Second)
-	defer shutdownCancel()
-
-	if err := pprofSrv.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("shutdown pprof server: %w", err)
+		if err := srv.Shutdown(ctx); err != nil {
+			return fmt.Errorf("shutdown server: %w", err)
+		}
 	}
 
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("shutdown server: %w", err)
-	}
 	return nil
 }
 
-func newStorage(ctx context.Context, cfg flags, logger *zap.Logger) (model.Storager, error) {
+func newStorage(ctx context.Context, cfg config.Server, logger *zap.Logger) (model.Storager, error) {
 	var storage model.Storager
 	var err error
 
 	switch {
-	case cfg.databaseDsn != "":
-		db, err := sql.Open("pgx", cfg.databaseDsn)
+	case cfg.DatabaseDsn != "":
+		db, err := sql.Open("pgx", cfg.DatabaseDsn)
 		if err != nil {
 			return nil, fmt.Errorf("open db: %w", err)
 		}
-		storage = postgres.New(db, cfg.maxRetry)
+		storage = postgres.New(db, cfg.MaxRetry)
 
 		logger.Info("init provider")
 		provider, err := goose.NewProvider(database.DialectPostgres, db, migrations.Embed)
@@ -176,20 +174,20 @@ func newStorage(ctx context.Context, cfg flags, logger *zap.Logger) (model.Stora
 		if _, err := provider.Up(ctx); err != nil {
 			return nil, fmt.Errorf("goose: provider up: %w", err)
 		}
-	case cfg.restore:
+	case cfg.Restore:
 		storage, err = local.NewRestore(&local.StorageOptions{
-			FileName: cfg.filePath,
-			Interval: cfg.storeInterval,
+			FileName: cfg.StoreFilePath,
+			Interval: cfg.StoreInterval,
 			Logger:   logger,
-			MaxRetry: cfg.maxRetry,
+			MaxRetry: cfg.MaxRetry,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("creating restore: %w", err)
 		}
 	default:
 		storage, err = local.NewRepository(&local.StorageOptions{
-			FileName: cfg.filePath,
-			Interval: cfg.storeInterval,
+			FileName: cfg.StoreFilePath,
+			Interval: cfg.StoreInterval,
 			Logger:   logger,
 		})
 		if err != nil {

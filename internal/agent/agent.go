@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"crypto/rsa"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -26,7 +27,7 @@ type Collector interface {
 func defaultOpts() *AgentOptions {
 	return &AgentOptions{
 		Addr:           "localhost:8080",
-		Key:            "",
+		Signature:      "",
 		MaxRetry:       3,
 		RateLimit:      3,
 		PollInterval:   2 * time.Second,
@@ -38,20 +39,21 @@ func defaultOpts() *AgentOptions {
 
 // AgentOptions определяет параметры для Агента.
 type AgentOptions struct {
-	Addr      string 
-	Key       string
+	Addr      string
+	Signature string
 	MaxRetry  int
 	RateLimit int
 
 	PollInterval   time.Duration
 	ReportInterval time.Duration
 
+	Key       *rsa.PublicKey
 	Client    *resty.Client
 	Logger    *zap.Logger
 	Collector Collector
 }
 
-// validateOptions валидирует параметры агента и подставляет значения по умолчанию, 
+// validateOptions валидирует параметры агента и подставляет значения по умолчанию,
 // если параметр не был предоставлен.
 func validateOptions(opts *AgentOptions) *AgentOptions {
 	if opts == nil {
@@ -228,7 +230,7 @@ func (a *Agent) SendManyMetrics(ctx context.Context, metrics []model.Metric) err
 	}
 
 	req := buildManyRequest(metrics)
-	body, err := buildManyBody(req)
+	body, err := a.buildManyBody(req)
 	if err != nil {
 		return fmt.Errorf("build body: %w", err)
 	}
@@ -241,8 +243,8 @@ func (a *Agent) SendManyMetrics(ctx context.Context, metrics []model.Metric) err
 		SetBody(body).
 		SetContext(ctx)
 
-	if a.opts.Key != "" {
-		s := sign.Signature(a.opts.Key)
+	if a.opts.Signature != "" {
+		s := sign.Signature(a.opts.Signature)
 		signature := s.Sign(body)
 		hash := base64.RawURLEncoding.EncodeToString(signature)
 		r.SetHeader("HashSHA256", hash)
