@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	IpHeader = "X-Real-IP"
+	IPHeader = "X-Real-IP"
 )
 
 func Subnet(subnet *net.IPNet) func(next http.Handler) http.Handler {
@@ -16,7 +16,7 @@ func Subnet(subnet *net.IPNet) func(next http.Handler) http.Handler {
 				ResponseWriter: w,
 			}
 
-			ip := net.ParseIP(r.Header.Get(IpHeader))
+			ip := net.ParseIP(r.Header.Get(IPHeader))
 			if len(ip) != 0 && !subnet.Contains(ip) {
 				w.WriteHeader(http.StatusForbidden)
 				return

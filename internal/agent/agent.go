@@ -253,7 +253,7 @@ func (a *Agent) SendManyMetrics(ctx context.Context, metrics []model.Metric) err
 	url := buildManyURL(a.opts.Addr)
 
 	r := a.opts.Client.R().
-		SetHeader(middleware.IpHeader, a.opts.Ip).
+		SetHeader(middleware.IPHeader, a.opts.Ip).
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Content-Encoding", "gzip").
 		SetBody(body).

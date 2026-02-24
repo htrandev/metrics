@@ -34,7 +34,7 @@ func TestSubnet(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
-			req.Header.Set(IpHeader, tc.ip)
+			req.Header.Set(IPHeader, tc.ip)
 
 			_, subnet, err := net.ParseCIDR(cidr)
 			require.NoError(t, err)
