@@ -14,8 +14,8 @@ func CIDR(s string) (*net.IPNet, error) {
 	return subnet, nil
 }
 
-// GetLocalIp returns local ip address.
-func GetLocalIp() (net.IP, error) {
+// GetLocalIP returns local ip address.
+func GetLocalIP() (net.IP, error) {
 	addresses, err := net.InterfaceAddrs()
 	if err != nil {
 		return nil, fmt.Errorf("get interface addr: %w", err)
