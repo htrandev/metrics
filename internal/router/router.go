@@ -2,6 +2,7 @@ package router
 
 import (
 	"crypto/rsa"
+	"net"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -10,6 +11,14 @@ import (
 	"github.com/htrandev/metrics/internal/handler"
 	"github.com/htrandev/metrics/internal/handler/middleware"
 )
+
+type RouterOptions struct {
+	Signature string
+	Subnet    *net.IPNet
+	Key       *rsa.PrivateKey
+	Logger    *zap.Logger
+	Handler   *handler.MetricHandler
+}
 
 // New возвращает новый экземляр
 //
@@ -21,44 +30,49 @@ import (
 //   - GET    /value/ - получить значение метрики в формате JSON
 //   - GET    /ping - проверка доступности БД
 //   - POST   /updates/ - обновить несколько метрик в формате JSON
-func New(signature string, key *rsa.PrivateKey, logger *zap.Logger, handler *handler.MetricHandler) *chi.Mux {
+func New(opts RouterOptions) *chi.Mux {
 	r := chi.NewRouter()
 
 	var (
 		getMethodChecker  = middleware.MethodChecker(http.MethodGet)
 		postMethodChecker = middleware.MethodChecker(http.MethodPost)
 
-		l = middleware.Logger(logger)
+		l = middleware.Logger(opts.Logger)
 
 		ct = middleware.ContentType()
 
-		signer = middleware.Sign(signature, logger)
+		signer = middleware.Sign(opts.Signature, opts.Logger)
 
-		compressor = middleware.Compress(logger)
+		compressor = middleware.Compress(opts.Logger)
 
-		rsa = middleware.RSA(key, logger)
+		rsa = middleware.RSA(opts.Key, opts.Logger)
 	)
 
 	r.With(getMethodChecker, l, signer, compressor).
-		Get("/", handler.GetAll)
+		Get("/", opts.Handler.GetAll)
 
 	r.With(getMethodChecker, l, signer).
-		Get("/value/{metricType}/{metricName}", handler.Get)
+		Get("/value/{metricType}/{metricName}", opts.Handler.Get)
 
 	r.With(postMethodChecker, l, signer).
-		Post("/update/{metricType}/{metricName}/{metricValue}", handler.Update)
+		Post("/update/{metricType}/{metricName}/{metricValue}", opts.Handler.Update)
 
 	r.With(postMethodChecker, l, ct, signer, compressor).
-		Post("/update/", handler.UpdateJSON)
+		Post("/update/", opts.Handler.UpdateJSON)
 
 	r.With(postMethodChecker, l, ct, signer, compressor).
-		Post("/value/", handler.GetJSON)
+		Post("/value/", opts.Handler.GetJSON)
 
 	r.With(getMethodChecker).
-		Get("/ping", handler.Ping)
+		Get("/ping", opts.Handler.Ping)
 
-	r.With(postMethodChecker, l, ct, rsa, signer, compressor).
-		Post("/updates/", handler.UpdateManyJSON)
+	middlewares := make([]func(http.Handler) http.Handler, 0, 7)
+	middlewares = append(middlewares, postMethodChecker, l, ct, rsa, signer, compressor)
+	if opts.Subnet != nil {
+		middlewares = append(middlewares, middleware.Subnet(opts.Subnet))
+	}
+	r.With(middlewares...).
+		Post("/updates/", opts.Handler.UpdateManyJSON)
 
 	return r
 }

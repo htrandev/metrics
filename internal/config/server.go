@@ -23,6 +23,7 @@ type Server struct {
 	AuditURL       string        `mapstructure:"AUDIT_URL"`
 	PprofAddr      string        `mapstructure:"PPROF_ADDRESS"`
 	PrivateKeyFile string        `mapstructure:"CRYPTO_KEY"`
+	TrustedSubnet  string        `mapstructure:"TRUSTED_SUBNET"`
 }
 
 // GetServerConfig return a server configuration.
@@ -69,6 +70,7 @@ func parseServerFlags(v *viper.Viper) map[string]any {
 		auditURL       = pflag.String("audit-url", "", "url to send audit")
 		pprofAddr      = pflag.String("pprof-addr", "localhost:6060", "pprof address")
 		privateKeyFile = pflag.String("crypto-key", "", "path to private key file")
+		trustedSubnet  = pflag.String("t", "", "trusted subnet")
 	)
 	pflag.Parse()
 
@@ -86,6 +88,7 @@ func parseServerFlags(v *viper.Viper) map[string]any {
 		"AUDIT_URL":      *auditURL,
 		"PPROF_ADDRESS":  *pprofAddr,
 		"CRYPTO_KEY":     *privateKeyFile,
+		"TRUSTED_SUBNET": *trustedSubnet,
 	}
 
 	for key, val := range flagVals {

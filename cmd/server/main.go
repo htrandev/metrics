@@ -30,6 +30,7 @@ import (
 	"github.com/htrandev/metrics/migrations"
 	"github.com/htrandev/metrics/pkg/crypto"
 	"github.com/htrandev/metrics/pkg/logger"
+	"github.com/htrandev/metrics/pkg/netutil"
 
 	_ "net/http/pprof"
 
@@ -113,8 +114,25 @@ func run() error {
 		return fmt.Errorf("init private key: %w", err)
 	}
 
+	zl.Info("configure router options")
+	ro := router.RouterOptions{
+		Signature: cfg.Signature,
+		Key:       privateKey,
+		Logger:    zl,
+		Handler:   metricHandler,
+	}
+
+	zl.Info("parse subnet")
+	if cfg.TrustedSubnet != "" {
+		subnet, err := netutil.CIDR(cfg.TrustedSubnet)
+		if err != nil {
+			return fmt.Errorf("get subnet: %w", err)
+		}
+		ro.Subnet = subnet
+	}
+
 	zl.Info("init router")
-	router := router.New(cfg.Signature, privateKey, zl, metricHandler)
+	router := router.New(ro)
 
 	group := errgroup.Group{}
 

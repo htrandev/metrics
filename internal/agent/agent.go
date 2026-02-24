@@ -13,7 +13,9 @@ import (
 	"github.com/go-resty/resty/v2"
 	"go.uber.org/zap"
 
+	"github.com/htrandev/metrics/internal/handler/middleware"
 	"github.com/htrandev/metrics/internal/model"
+	"github.com/htrandev/metrics/pkg/netutil"
 	"github.com/htrandev/metrics/pkg/sign"
 )
 
@@ -43,6 +45,7 @@ type AgentOptions struct {
 	Signature string
 	MaxRetry  int
 	RateLimit int
+	Ip        string
 
 	PollInterval   time.Duration
 	ReportInterval time.Duration
@@ -83,6 +86,18 @@ func validateOptions(opts *AgentOptions) *AgentOptions {
 		opts.Logger = zap.NewNop()
 	}
 
+	if opts.Client == nil {
+		opts.Client = resty.New()
+	}
+
+	ip, err := netutil.GetLocalIp()
+	if err != nil {
+		opts.Logger.Error("get local ip",
+			zap.String("method", "SendManyMetrics"),
+			zap.Error(err),
+		)
+	}
+	opts.Ip = ip.String()
 	return opts
 }
 
@@ -238,6 +253,7 @@ func (a *Agent) SendManyMetrics(ctx context.Context, metrics []model.Metric) err
 	url := buildManyURL(a.opts.Addr)
 
 	r := a.opts.Client.R().
+		SetHeader(middleware.IpHeader, a.opts.Ip).
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Content-Encoding", "gzip").
 		SetBody(body).

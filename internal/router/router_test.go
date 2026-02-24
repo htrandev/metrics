@@ -52,7 +52,13 @@ func Example() {
 	)
 
 	// инициализируем роутер
-	router := New("", nil, logger, handler)
+	router := New(RouterOptions{
+		Signature: "",
+		Subnet:    nil,
+		Key:       nil,
+		Logger:    logger,
+		Handler:   handler,
+	})
 
 	// инициализируем сервис
 	srv := http.Server{
