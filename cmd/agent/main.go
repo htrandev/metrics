@@ -65,6 +65,7 @@ func run() error {
 		zl.Info("init grpc conn")
 		conn, err := grpc.NewClient(conf.GRPCAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
+			return fmt.Errorf("init grpc client conn: %w", err)
 		}
 		defer conn.Close()
 		zl.Info("init grpc client")
