@@ -28,32 +28,32 @@ func TestStore(t *testing.T) {
 	testCases := []struct {
 		name          string
 		storage       *MemStorage
-		req           *model.Metric
+		req           *model.MetricDto
 		wantErr       bool
-		expectedValue model.Metric
+		expectedValue model.MetricDto
 	}{
 		{
 			name: "valid gauge",
-			req: &model.Metric{
+			req: &model.MetricDto{
 				Name:  "gauge",
 				Value: model.MetricValue{Type: model.TypeGauge, Gauge: 0.1},
 			},
 			storage: emptyMemstorage,
 			wantErr: false,
-			expectedValue: model.Metric{
+			expectedValue: model.MetricDto{
 				Name:  "gauge",
 				Value: model.MetricValue{Type: model.TypeGauge, Gauge: 0.1},
 			},
 		},
 		{
 			name: "valid counter",
-			req: &model.Metric{
+			req: &model.MetricDto{
 				Name:  "counter",
 				Value: model.MetricValue{Type: model.TypeCounter, Counter: 1},
 			},
 			storage: emptyMemstorage,
 			wantErr: false,
-			expectedValue: model.Metric{
+			expectedValue: model.MetricDto{
 				Name:  "counter",
 				Value: model.MetricValue{Type: model.TypeCounter, Counter: 1},
 			},
@@ -61,12 +61,12 @@ func TestStore(t *testing.T) {
 		{
 			name:    "filled mem storage gauge",
 			storage: filledMemStorage(t),
-			req: &model.Metric{
+			req: &model.MetricDto{
 				Name:  "gauge",
 				Value: model.MetricValue{Type: model.TypeGauge, Gauge: 0.2},
 			},
 			wantErr: false,
-			expectedValue: model.Metric{
+			expectedValue: model.MetricDto{
 				Name:  "gauge",
 				Value: model.MetricValue{Type: model.TypeGauge, Gauge: 0.2},
 			},
@@ -74,12 +74,12 @@ func TestStore(t *testing.T) {
 		{
 			name:    "filled mem storage counter",
 			storage: filledMemStorage(t),
-			req: &model.Metric{
+			req: &model.MetricDto{
 				Name:  "counter",
 				Value: model.MetricValue{Type: model.TypeCounter, Counter: 2},
 			},
 			wantErr: false,
-			expectedValue: model.Metric{
+			expectedValue: model.MetricDto{
 				Name:  "counter",
 				Value: model.MetricValue{Type: model.TypeCounter, Counter: 3},
 			},
@@ -94,7 +94,7 @@ func TestStore(t *testing.T) {
 				return
 			}
 
-			var actValue model.Metric
+			var actValue model.MetricDto
 			if tc.expectedValue.Name != "" {
 				actValue, err = tc.storage.Get(context.Background(), tc.expectedValue.Name)
 				require.NoError(t, err)
@@ -123,13 +123,13 @@ func TestStoreMany(t *testing.T) {
 	testCases := []struct {
 		name          string
 		storage       *MemStorage
-		metrics       []model.Metric
+		metrics       []model.MetricDto
 		wantErr       bool
-		expectedValue []model.Metric
+		expectedValue []model.MetricDto
 	}{
 		{
 			name: "valid",
-			metrics: []model.Metric{
+			metrics: []model.MetricDto{
 				model.Gauge("gauge", 0.1),
 				model.Gauge("gauge", 0.2),
 				model.Counter("counter", 1),
@@ -137,7 +137,7 @@ func TestStoreMany(t *testing.T) {
 			},
 			storage: emptyMemstorage,
 			wantErr: false,
-			expectedValue: []model.Metric{
+			expectedValue: []model.MetricDto{
 				model.Counter("counter", 3),
 				model.Gauge("gauge", 0.2),
 			},
@@ -187,7 +187,7 @@ func TestGet(t *testing.T) {
 		storage        *MemStorage
 		metricName     string
 		wantErr        bool
-		expectedMetric model.Metric
+		expectedMetric model.MetricDto
 	}{
 		{
 			name:           "valid gauge",
@@ -240,19 +240,19 @@ func TestGetAll(t *testing.T) {
 		name           string
 		storage        *MemStorage
 		wantErr        bool
-		expectedResult []model.Metric
+		expectedResult []model.MetricDto
 	}{
 		{
 			name:           "valid empty storage",
 			storage:        emptyMemstorage,
 			wantErr:        false,
-			expectedResult: []model.Metric{},
+			expectedResult: []model.MetricDto{},
 		},
 		{
 			name:    "valid filled storage",
 			storage: filledMemStorage(t),
 			wantErr: false,
-			expectedResult: []model.Metric{
+			expectedResult: []model.MetricDto{
 				{Name: "counter", Value: model.MetricValue{
 					Type:    model.TypeCounter,
 					Counter: 1,
@@ -289,8 +289,8 @@ func TestSet(t *testing.T) {
 	testCases := []struct {
 		name           string
 		storage        *MemStorage
-		req            *model.Metric
-		expetedMetrics []model.Metric
+		req            *model.MetricDto
+		expetedMetrics []model.MetricDto
 	}{
 		{
 			name: "valid empty gauge",
@@ -302,11 +302,11 @@ func TestSet(t *testing.T) {
 				require.NoError(t, err)
 				return s
 			}(),
-			req: &model.Metric{
+			req: &model.MetricDto{
 				Name:  "gauge",
 				Value: model.MetricValue{Type: model.TypeGauge, Gauge: 0.2},
 			},
-			expetedMetrics: []model.Metric{{
+			expetedMetrics: []model.MetricDto{{
 				Name:  "gauge",
 				Value: model.MetricValue{Type: model.TypeGauge, Gauge: 0.2},
 			}},
@@ -321,11 +321,11 @@ func TestSet(t *testing.T) {
 				require.NoError(t, err)
 				return s
 			}(),
-			req: &model.Metric{
+			req: &model.MetricDto{
 				Name:  "counter",
 				Value: model.MetricValue{Type: model.TypeCounter, Counter: 2},
 			},
-			expetedMetrics: []model.Metric{{
+			expetedMetrics: []model.MetricDto{{
 				Name:  "counter",
 				Value: model.MetricValue{Type: model.TypeCounter, Counter: 2},
 			}},
@@ -333,11 +333,11 @@ func TestSet(t *testing.T) {
 		{
 			name:    "valid filled gauge",
 			storage: filledMemStorage(t),
-			req: &model.Metric{
+			req: &model.MetricDto{
 				Name:  "gauge",
 				Value: model.MetricValue{Type: model.TypeGauge, Gauge: 0.2},
 			},
-			expetedMetrics: []model.Metric{
+			expetedMetrics: []model.MetricDto{
 				{
 					Name:  "counter",
 					Value: model.MetricValue{Type: model.TypeCounter, Counter: 1},
@@ -351,11 +351,11 @@ func TestSet(t *testing.T) {
 		{
 			name:    "valid filled counter",
 			storage: filledMemStorage(t),
-			req: &model.Metric{
+			req: &model.MetricDto{
 				Name:  "counter",
 				Value: model.MetricValue{Type: model.TypeCounter, Counter: 2},
 			},
-			expetedMetrics: []model.Metric{
+			expetedMetrics: []model.MetricDto{
 				{
 					Name:  "counter",
 					Value: model.MetricValue{Type: model.TypeCounter, Counter: 1},
@@ -391,14 +391,14 @@ func filledMemStorage(t *testing.T) *MemStorage {
 	})
 	require.NoError(t, err)
 
-	if err := memstorage.Store(ctx, &model.Metric{
+	if err := memstorage.Store(ctx, &model.MetricDto{
 		Name:  "gauge",
 		Value: model.MetricValue{Type: model.TypeGauge, Gauge: 0.1},
 	}); err != nil {
 		t.Fatalf("store gauge: %v", err)
 	}
 
-	if err := memstorage.Store(ctx, &model.Metric{
+	if err := memstorage.Store(ctx, &model.MetricDto{
 		Name:  "counter",
 		Value: model.MetricValue{Type: model.TypeCounter, Counter: 1},
 	}); err != nil {

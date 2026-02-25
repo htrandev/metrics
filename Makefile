@@ -34,5 +34,13 @@ gofmt:
 goimports:
 	@goimports -w -local github.com/htrandev/metrics .
 
+.PHONY: generate.keys
 generate.keys:
 	@go run ./cmd/keygen...
+
+.PHONY: proto
+proto:
+	@protoc --go_out=. --go_opt=paths=source_relative \
+	--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+	--go_opt=default_api_level=API_OPAQUE \
+	internal/proto/metrics.proto

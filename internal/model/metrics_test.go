@@ -10,34 +10,34 @@ func TestSetValue(t *testing.T) {
 	testCases := []struct {
 		name           string
 		value          string
-		metric         Metric
+		metric         MetricDto
 		wantErr        bool
-		expectedMetric Metric
+		expectedMetric MetricDto
 	}{
 		{
 			name:           "valid gauge",
 			value:          "0.1",
-			metric:         Metric{Name: "gauge", Value: MetricValue{Type: TypeGauge}},
+			metric:         MetricDto{Name: "gauge", Value: MetricValue{Type: TypeGauge}},
 			wantErr:        false,
-			expectedMetric: Metric{Name: "gauge", Value: MetricValue{Type: TypeGauge, Gauge: 0.1}},
+			expectedMetric: MetricDto{Name: "gauge", Value: MetricValue{Type: TypeGauge, Gauge: 0.1}},
 		},
 		{
 			name:           "valid counter",
 			value:          "1",
-			metric:         Metric{Name: "counter", Value: MetricValue{Type: TypeCounter}},
+			metric:         MetricDto{Name: "counter", Value: MetricValue{Type: TypeCounter}},
 			wantErr:        false,
-			expectedMetric: Metric{Name: "counter", Value: MetricValue{Type: TypeCounter, Counter: 1}},
+			expectedMetric: MetricDto{Name: "counter", Value: MetricValue{Type: TypeCounter, Counter: 1}},
 		},
 		{
 			name:    "invalid gauge value",
 			value:   "test",
-			metric:  Metric{Name: "gauge", Value: MetricValue{Type: TypeGauge}},
+			metric:  MetricDto{Name: "gauge", Value: MetricValue{Type: TypeGauge}},
 			wantErr: true,
 		},
 		{
 			name:    "invalid counter value",
 			value:   "test",
-			metric:  Metric{Name: "counter", Value: MetricValue{Type: TypeCounter}},
+			metric:  MetricDto{Name: "counter", Value: MetricValue{Type: TypeCounter}},
 			wantErr: true,
 		},
 	}

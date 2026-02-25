@@ -28,7 +28,7 @@ type StorageOptions struct {
 
 // MemStorage реализует in-memory хранилище метрик.
 type MemStorage struct {
-	metrics map[string]model.Metric
+	metrics map[string]model.MetricDto
 
 	file    *os.File
 	scanner *bufio.Scanner
@@ -66,7 +66,7 @@ func NewRestore(opts *StorageOptions) (*MemStorage, error) {
 }
 
 func new(flag int, opts *StorageOptions) (*MemStorage, error) {
-	metrics := make(map[string]model.Metric)
+	metrics := make(map[string]model.MetricDto)
 	f, err := os.OpenFile(opts.FileName, flag, 0664)
 	if err != nil {
 		return nil, fmt.Errorf("restore: open file: %w", err)
@@ -97,7 +97,7 @@ func (m *MemStorage) Ping(ctx context.Context) error {
 
 // Set записывает значение метрики.
 // Если метрика уже существует, то ничего не делает.
-func (m *MemStorage) Set(Ctx context.Context, request *model.Metric) error {
+func (m *MemStorage) Set(Ctx context.Context, request *model.MetricDto) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -110,7 +110,7 @@ func (m *MemStorage) Set(Ctx context.Context, request *model.Metric) error {
 
 // Store записывает новое значение метрики.
 // Если метрика существует, то обновляет ее значение.
-func (m *MemStorage) Store(ctx context.Context, request *model.Metric) error {
+func (m *MemStorage) Store(ctx context.Context, request *model.MetricDto) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -133,7 +133,7 @@ func (m *MemStorage) Store(ctx context.Context, request *model.Metric) error {
 
 // StoreMany записывает новое значение метрик.
 // Если метрика существует, то обновляет ее значение.
-func (m *MemStorage) StoreMany(ctx context.Context, metrics []model.Metric) error {
+func (m *MemStorage) StoreMany(ctx context.Context, metrics []model.MetricDto) error {
 	if len(metrics) == 0 {
 		log.Println("repository/storeMany: request is nil")
 		return nil
@@ -155,7 +155,7 @@ func (m *MemStorage) StoreMany(ctx context.Context, metrics []model.Metric) erro
 // StoreManyWithRetry записывает новое значение метрик.
 // Если метрика существует, то обновляет ее значение.
 // При ошибке пытается записать еще maxRetry раз
-func (m *MemStorage) StoreManyWithRetry(ctx context.Context, metrics []model.Metric) error {
+func (m *MemStorage) StoreManyWithRetry(ctx context.Context, metrics []model.MetricDto) error {
 	err := m.StoreMany(ctx, metrics)
 	if err != nil {
 		for i := 0; i < m.opts.MaxRetry; i++ {
@@ -170,20 +170,20 @@ func (m *MemStorage) StoreManyWithRetry(ctx context.Context, metrics []model.Met
 }
 
 // Get возвращает метрику по имени.
-func (m *MemStorage) Get(ctx context.Context, name string) (model.Metric, error) {
+func (m *MemStorage) Get(ctx context.Context, name string) (model.MetricDto, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	metric, ok := m.metrics[name]
 	if !ok {
-		return model.Metric{}, fmt.Errorf("repository/get: metric with name [%s]: %w", name, repository.ErrNotFound)
+		return model.MetricDto{}, fmt.Errorf("repository/get: metric with name [%s]: %w", name, repository.ErrNotFound)
 	}
 	return metric, nil
 }
 
 // GetAll возвращает все метрики.
-func (m *MemStorage) GetAll(ctx context.Context) ([]model.Metric, error) {
-	metrics := make([]model.Metric, 0, len(m.metrics))
+func (m *MemStorage) GetAll(ctx context.Context) ([]model.MetricDto, error) {
+	metrics := make([]model.MetricDto, 0, len(m.metrics))
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -244,7 +244,7 @@ func (m *MemStorage) restore() error {
 	for m.scanner.Scan() {
 		data := m.scanner.Bytes()
 
-		var metric model.Metric
+		var metric model.MetricDto
 		if err := easyjson.Unmarshal(data, &metric); err != nil {
 			m.opts.Logger.Error("can't unmarshal data from file", zap.Error(err), zap.String("scope", "restore"))
 			continue

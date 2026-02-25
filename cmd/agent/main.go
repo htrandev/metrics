@@ -10,13 +10,18 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/htrandev/metrics/internal/agent"
+	metricsclient "github.com/htrandev/metrics/internal/agent/client"
 	"github.com/htrandev/metrics/internal/config"
 	"github.com/htrandev/metrics/internal/info"
 	"github.com/htrandev/metrics/internal/model"
+	"github.com/htrandev/metrics/internal/proto"
 	"github.com/htrandev/metrics/pkg/crypto"
 	"github.com/htrandev/metrics/pkg/logger"
+	"github.com/htrandev/metrics/pkg/netutil"
 )
 
 func main() {
@@ -41,10 +46,6 @@ func run() error {
 		return fmt.Errorf("init logger: %w", err)
 	}
 
-	zl.Info("init resty client")
-	client := resty.New().
-		SetTimeout(30 * time.Second)
-
 	zl.Info("init collection")
 	collection := model.NewCollection()
 
@@ -54,12 +55,48 @@ func run() error {
 		return fmt.Errorf("init public key: %w", err)
 	}
 
+	ip, err := netutil.GetLocalIP()
+	if err != nil {
+		return fmt.Errorf("get local ip addr: %w", err)
+	}
+
+	var client agent.Client
+	if conf.UseGRPC {
+		zl.Info("init grpc conn")
+		conn, err := grpc.NewClient(conf.GRPCAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+		}
+		defer conn.Close()
+		zl.Info("init grpc client")
+		grpcClient := proto.NewMetricsClient(conn)
+
+		zl.Info("create grpc client")
+		client = metricsclient.NewGRPC(grpcClient,
+			metricsclient.WithMaxRetry(conf.MaxRetry),
+			metricsclient.WithAddr(conf.Addr),
+			metricsclient.WithLogger(zl),
+			metricsclient.WithPublicKey(publicKey),
+			metricsclient.WithSignature(conf.Signature),
+			metricsclient.WithIP(ip.String()),
+		)
+	} else {
+		zl.Info("init resty client")
+		restyClient := resty.New().
+			SetTimeout(30 * time.Second)
+
+		zl.Info("create http client")
+		client = metricsclient.NewHTTP(restyClient,
+			metricsclient.WithMaxRetry(conf.MaxRetry),
+			metricsclient.WithAddr(conf.Addr),
+			metricsclient.WithLogger(zl),
+			metricsclient.WithPublicKey(publicKey),
+			metricsclient.WithSignature(conf.Signature),
+			metricsclient.WithIP(ip.String()),
+		)
+	}
+
 	zl.Info("init agent")
 	agent := agent.New(&agent.AgentOptions{
-		Addr:           conf.Addr,
-		Signature:      conf.Signature,
-		MaxRetry:       conf.MaxRetry,
-		Key:            publicKey,
 		Logger:         zl,
 		Client:         client,
 		Collector:      collection,

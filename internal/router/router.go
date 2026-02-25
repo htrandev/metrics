@@ -20,7 +20,7 @@ type RouterOptions struct {
 	Handler   *handler.MetricHandler
 }
 
-// New возвращает новый экземляр
+// New возвращает новый экземляр роутера.
 //
 // Эндпоинты:
 //   - GET    / - получить все метрики

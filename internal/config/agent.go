@@ -18,6 +18,8 @@ type Agent struct {
 	Signature      string        `mapstructure:"SIGNATURE"`
 	RateLimit      int           `mapstructure:"RATE_LIMIT"`
 	PublicKeyFile  string        `mapstructure:"CRYPTO_KEY"`
+	UseGRPC        bool          `mapstructure:"USE_GRPC"`
+	GRPCAddr       string        `mapstructure:"GRPC_ADDRESS"`
 }
 
 // GetAgentConfig return a server configuration.
@@ -25,10 +27,12 @@ func GetAgentConfig() (Agent, error) {
 	v := viper.New()
 
 	filepath := getConfigFilePath()
-	v.SetConfigFile(filepath)
+	if filepath != "" {
+		v.SetConfigFile(filepath)
 
-	if err := v.ReadInConfig(); err != nil {
-		return Agent{}, fmt.Errorf("load config file: %w", err)
+		if err := v.ReadInConfig(); err != nil {
+			return Agent{}, fmt.Errorf("load config file: %w", err)
+		}
 	}
 
 	flagVals := parseAgentFlags(v)
@@ -51,7 +55,7 @@ func GetAgentConfig() (Agent, error) {
 
 func parseAgentFlags(v *viper.Viper) map[string]any {
 	var (
-		addr          = pflag.String("a", "localhost:8080", "address to run server")
+		addr          = pflag.String("a", "localhost:8080", "server address")
 		report        = pflag.Int("r", 10, "report interval in seconds")
 		poll          = pflag.Int("p", 2, "poll interval in seconds")
 		logLvl        = pflag.String("lvl", "debug", "log level")
@@ -59,6 +63,8 @@ func parseAgentFlags(v *viper.Viper) map[string]any {
 		signature     = pflag.String("k", "", "secret key")
 		rateLimit     = pflag.Int("l", 3, "agent rate limit")
 		publicKeyFile = pflag.String("crypto-key", "", "path to public key file")
+		useGRPC       = pflag.Bool("user-grpc", false, "send metrics using grpc")
+		grpcAddr      = pflag.String("grpc-addr", "localhost:8090", "grpc server address")
 	)
 
 	pflag.Parse()
@@ -72,6 +78,8 @@ func parseAgentFlags(v *viper.Viper) map[string]any {
 		"SIGNATURE":       *signature,
 		"RATE_LIMIT":      *rateLimit,
 		"CRYPTO_KEY":      *publicKeyFile,
+		"USE_GRPC":        *useGRPC,
+		"GRPC_ADDRESS":    *grpcAddr,
 	}
 	for key, val := range flagVals {
 		if val != nil {

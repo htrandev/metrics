@@ -44,15 +44,15 @@ func (m *mockStorage) Ping(_ context.Context) error {
 
 func (m *mockStorage) Close() error { return nil }
 
-func (m *mockStorage) Set(_ context.Context, _ *model.Metric) error {
+func (m *mockStorage) Set(_ context.Context, _ *model.MetricDto) error {
 	return nil
 }
 
-func (m *mockStorage) Get(_ context.Context, _ string) (model.Metric, error) {
+func (m *mockStorage) Get(_ context.Context, _ string) (model.MetricDto, error) {
 	if m.getErr {
-		return model.Metric{}, errGet
+		return model.MetricDto{}, errGet
 	}
-	metric := model.Metric{Name: "test"}
+	metric := model.MetricDto{Name: "test"}
 	if m.gauge {
 		metric.Value.Type = model.TypeGauge
 		metric.Value.Gauge = 0.1
@@ -65,31 +65,31 @@ func (m *mockStorage) Get(_ context.Context, _ string) (model.Metric, error) {
 	return metric, nil
 }
 
-func (m *mockStorage) GetAll(_ context.Context) ([]model.Metric, error) {
+func (m *mockStorage) GetAll(_ context.Context) ([]model.MetricDto, error) {
 	if m.getAllErr {
 		return nil, errGetAll
 	}
 	if m.filled {
 		return filledStorage(), nil
 	}
-	return []model.Metric{}, nil
+	return []model.MetricDto{}, nil
 }
 
-func (m *mockStorage) Store(_ context.Context, _ *model.Metric) error {
+func (m *mockStorage) Store(_ context.Context, _ *model.MetricDto) error {
 	if m.storeErr {
 		return errStore
 	}
 	return nil
 }
 
-func (m *mockStorage) StoreMany(_ context.Context, _ []model.Metric) error {
+func (m *mockStorage) StoreMany(_ context.Context, _ []model.MetricDto) error {
 	if m.storeManyErr {
 		return errStoreMany
 	}
 	return nil
 }
 
-func (m *mockStorage) StoreManyWithRetry(_ context.Context, _ []model.Metric) error {
+func (m *mockStorage) StoreManyWithRetry(_ context.Context, _ []model.MetricDto) error {
 	if m.storeManyWithRetryErr {
 		return errStoreManyWithRetry
 	}
@@ -103,7 +103,7 @@ func TestGet(t *testing.T) {
 		storage        *mockStorage
 		metricName     string
 		wantErr        bool
-		expectedMetric model.Metric
+		expectedMetric model.MetricDto
 		expectedError  error
 	}{
 		{
@@ -111,7 +111,7 @@ func TestGet(t *testing.T) {
 			storage:    &mockStorage{gauge: true},
 			metricName: "test",
 			wantErr:    false,
-			expectedMetric: model.Metric{
+			expectedMetric: model.MetricDto{
 				Name:  "test",
 				Value: model.MetricValue{Type: model.TypeGauge, Gauge: 0.1},
 			},
@@ -121,7 +121,7 @@ func TestGet(t *testing.T) {
 			storage:    &mockStorage{gauge: false},
 			metricName: "test",
 			wantErr:    false,
-			expectedMetric: model.Metric{
+			expectedMetric: model.MetricDto{
 				Name:  "test",
 				Value: model.MetricValue{Type: model.TypeCounter, Counter: 1},
 			},
@@ -131,7 +131,7 @@ func TestGet(t *testing.T) {
 			storage:        &mockStorage{getErr: true},
 			metricName:     "test",
 			wantErr:        true,
-			expectedMetric: model.Metric{},
+			expectedMetric: model.MetricDto{},
 			expectedError:  errGet,
 		},
 	}
@@ -157,14 +157,14 @@ func TestGetAll(t *testing.T) {
 		name           string
 		storage        *mockStorage
 		wantErr        bool
-		expectedMetric []model.Metric
+		expectedMetric []model.MetricDto
 		expectedError  error
 	}{
 		{
 			name:           "valid empty",
 			storage:        &mockStorage{filled: false},
 			wantErr:        false,
-			expectedMetric: []model.Metric{},
+			expectedMetric: []model.MetricDto{},
 		},
 		{
 			name:           "valid filled",
@@ -202,20 +202,20 @@ func TestStore(t *testing.T) {
 	testCases := []struct {
 		name          string
 		storage       *mockStorage
-		metric        *model.Metric
+		metric        *model.MetricDto
 		wantErr       bool
 		expectedError error
 	}{
 		{
 			name:    "valid gauge",
 			storage: &mockStorage{},
-			metric:  &model.Metric{},
+			metric:  &model.MetricDto{},
 			wantErr: false,
 		},
 		{
 			name:          "invalid",
 			storage:       &mockStorage{storeErr: true},
-			metric:        &model.Metric{},
+			metric:        &model.MetricDto{},
 			wantErr:       true,
 			expectedError: errStore,
 		},
@@ -247,14 +247,14 @@ func TestStoreMany(t *testing.T) {
 	testCases := []struct {
 		name          string
 		storage       *mockStorage
-		metrics       []model.Metric
+		metrics       []model.MetricDto
 		wantErr       bool
 		expectedError error
 	}{
 		{
 			name:    "valid",
 			storage: &mockStorage{},
-			metrics: []model.Metric{
+			metrics: []model.MetricDto{
 				model.Gauge("gauge", 0.1),
 				model.Counter("counter", 1),
 			},
@@ -263,7 +263,7 @@ func TestStoreMany(t *testing.T) {
 		{
 			name:    "invalid",
 			storage: &mockStorage{storeManyErr: true},
-			metrics: []model.Metric{
+			metrics: []model.MetricDto{
 				model.Gauge("gauge", 0.1),
 				model.Counter("counter", 1),
 			},
@@ -298,14 +298,14 @@ func TestStoreManyWithRetry(t *testing.T) {
 	testCases := []struct {
 		name          string
 		storage       *mockStorage
-		metrics       []model.Metric
+		metrics       []model.MetricDto
 		wantErr       bool
 		expectedError error
 	}{
 		{
 			name:    "valid",
 			storage: &mockStorage{},
-			metrics: []model.Metric{
+			metrics: []model.MetricDto{
 				model.Gauge("gauge", 0.1),
 				model.Counter("counter", 1),
 			},
@@ -314,7 +314,7 @@ func TestStoreManyWithRetry(t *testing.T) {
 		{
 			name:    "invalid",
 			storage: &mockStorage{storeManyWithRetryErr: true},
-			metrics: []model.Metric{
+			metrics: []model.MetricDto{
 				model.Gauge("gauge", 0.1),
 				model.Counter("counter", 1),
 			},
@@ -380,8 +380,8 @@ func TestPing(t *testing.T) {
 	}
 }
 
-func filledStorage() []model.Metric {
-	metrics := []model.Metric{
+func filledStorage() []model.MetricDto {
+	metrics := []model.MetricDto{
 		{
 			Name: "gauge",
 			Value: model.MetricValue{

@@ -12,7 +12,7 @@ import (
 	"github.com/htrandev/metrics/internal/model"
 )
 
-func buildSingleUpdateRequest(r *http.Request) (*model.Metric, error) {
+func buildSingleUpdateRequest(r *http.Request) (*model.MetricDto, error) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return nil, fmt.Errorf("can't read body: %w", err)
@@ -31,7 +31,7 @@ func buildSingleUpdateRequest(r *http.Request) (*model.Metric, error) {
 	return &m, nil
 }
 
-func buildGetRequest(r *http.Request) (*model.Metric, error) {
+func buildGetRequest(r *http.Request) (*model.MetricDto, error) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return nil, fmt.Errorf("can't read body: %w", err)
@@ -43,7 +43,7 @@ func buildGetRequest(r *http.Request) (*model.Metric, error) {
 		return nil, fmt.Errorf("can't unmarshal request: %w", err)
 	}
 
-	m := &model.Metric{
+	m := &model.MetricDto{
 		Name: req.ID,
 	}
 
@@ -59,7 +59,7 @@ func buildGetRequest(r *http.Request) (*model.Metric, error) {
 	return m, nil
 }
 
-func buildResponse(metric model.Metric) model.Metrics {
+func buildResponse(metric model.MetricDto) model.Metrics {
 	m := model.Metrics{
 		ID:    metric.Name,
 		MType: metric.Value.Type.String(),
@@ -75,7 +75,7 @@ func buildResponse(metric model.Metric) model.Metrics {
 	return m
 }
 
-func buildManyUpdateRequest(r *http.Request) ([]model.Metric, error) {
+func buildManyUpdateRequest(r *http.Request) ([]model.MetricDto, error) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return nil, fmt.Errorf("can't read body: %w", err)
@@ -87,7 +87,7 @@ func buildManyUpdateRequest(r *http.Request) ([]model.Metric, error) {
 		return nil, fmt.Errorf("can't unmarshal request: %w", err)
 	}
 
-	metrics := make([]model.Metric, 0, len(req))
+	metrics := make([]model.MetricDto, 0, len(req))
 	for _, metric := range req {
 		m, err := buildInternalMetric(metric)
 		if err != nil {
@@ -99,8 +99,8 @@ func buildManyUpdateRequest(r *http.Request) ([]model.Metric, error) {
 	return metrics, nil
 }
 
-func buildInternalMetric(metric model.Metrics) (model.Metric, error) {
-	var m model.Metric
+func buildInternalMetric(metric model.Metrics) (model.MetricDto, error) {
+	var m model.MetricDto
 
 	switch metric.MType {
 	case model.TypeGauge.String():
@@ -122,7 +122,7 @@ func buildInternalMetric(metric model.Metrics) (model.Metric, error) {
 	return m, nil
 }
 
-func buildAuditInfoMessage(metrics []model.Metric, ip string) audit.AuditInfo {
+func buildAuditInfoMessage(metrics []model.MetricDto, ip string) audit.AuditInfo {
 	names := make([]string, 0, len(metrics))
 	for _, metric := range metrics {
 		names = append(names, metric.Name)

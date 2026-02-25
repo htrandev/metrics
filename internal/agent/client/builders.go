@@ -1,4 +1,4 @@
-package agent
+package client
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 	"github.com/htrandev/metrics/pkg/crypto"
 )
 
-func (a *Agent) buildManyBody(metrics model.MetricsSlice) ([]byte, error) {
+func (c *HTTPClient) buildManyBody(metrics model.MetricsSlice) ([]byte, error) {
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 
@@ -21,8 +21,8 @@ func (a *Agent) buildManyBody(metrics model.MetricsSlice) ([]byte, error) {
 		return nil, fmt.Errorf("buildManyBody: can't marshal metrics: %w", err)
 	}
 
-	if a.opts.Key != nil {
-		encrypted, err := crypto.Encrypt(a.opts.Key, p)
+	if c.opts.key != nil {
+		encrypted, err := crypto.Encrypt(c.opts.key, p)
 		if err != nil {
 			return nil, fmt.Errorf("buildManyBody: encrypt body: %w", err)
 		}
@@ -38,7 +38,7 @@ func (a *Agent) buildManyBody(metrics model.MetricsSlice) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func buildSingleRequest(metric model.Metric) model.Metrics {
+func buildSingleRequest(metric model.MetricDto) model.Metrics {
 	m := model.Metrics{
 		ID:    metric.Name,
 		MType: metric.Value.Type.String(),
@@ -54,7 +54,7 @@ func buildSingleRequest(metric model.Metric) model.Metrics {
 	return m
 }
 
-func buildManyRequest(metrics []model.Metric) model.MetricsSlice {
+func buildManyRequest(metrics []model.MetricDto) model.MetricsSlice {
 	m := make([]model.Metrics, 0, len(metrics))
 	for _, metric := range metrics {
 		m = append(m, buildSingleRequest(metric))

@@ -24,6 +24,7 @@ type Server struct {
 	PprofAddr      string        `mapstructure:"PPROF_ADDRESS"`
 	PrivateKeyFile string        `mapstructure:"CRYPTO_KEY"`
 	TrustedSubnet  string        `mapstructure:"TRUSTED_SUBNET"`
+	GRPCAddr       string        `mapstructure:"GRPC_ADDRESS"`
 }
 
 // GetServerConfig return a server configuration.
@@ -31,10 +32,12 @@ func GetServerConfig() (Server, error) {
 	v := viper.New()
 
 	filepath := getConfigFilePath()
-	v.SetConfigFile(filepath)
+	if filepath != "" {
+		v.SetConfigFile(filepath)
 
-	if err := v.ReadInConfig(); err != nil {
-		return Server{}, fmt.Errorf("load config file: %w", err)
+		if err := v.ReadInConfig(); err != nil {
+			return Server{}, fmt.Errorf("load config file: %w", err)
+		}
 	}
 
 	flagVals := parseServerFlags(v)
@@ -71,6 +74,7 @@ func parseServerFlags(v *viper.Viper) map[string]any {
 		pprofAddr      = pflag.String("pprof-addr", "localhost:6060", "pprof address")
 		privateKeyFile = pflag.String("crypto-key", "", "path to private key file")
 		trustedSubnet  = pflag.String("t", "", "trusted subnet")
+		grpcAddr       = pflag.String("grpc", "localhost:8090", "address to run grpc server")
 	)
 	pflag.Parse()
 
@@ -89,6 +93,7 @@ func parseServerFlags(v *viper.Viper) map[string]any {
 		"PPROF_ADDRESS":  *pprofAddr,
 		"CRYPTO_KEY":     *privateKeyFile,
 		"TRUSTED_SUBNET": *trustedSubnet,
+		"GRPC_ADDRESS":   *grpcAddr,
 	}
 
 	for key, val := range flagVals {

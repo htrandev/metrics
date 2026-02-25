@@ -33,7 +33,7 @@ func Generate(path string) error {
 		return fmt.Errorf("create private key file: %w", err)
 	}
 	defer privateFile.Close()
-	
+
 	privatePEM := &pem.Block{
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
@@ -41,7 +41,7 @@ func Generate(path string) error {
 	if err := pem.Encode(privateFile, privatePEM); err != nil {
 		return fmt.Errorf("encode private key: %w", err)
 	}
-	
+
 	publicFile, err := os.Create(publicPath)
 	if err != nil {
 		return fmt.Errorf("create public key file: %w", err)

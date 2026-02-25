@@ -16,6 +16,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/htrandev/metrics/internal/audit"
+	"github.com/htrandev/metrics/internal/contracts"
 	"github.com/htrandev/metrics/internal/model"
 	"github.com/htrandev/metrics/internal/repository"
 )
@@ -41,37 +42,37 @@ type mockService struct {
 	filled bool
 }
 
-var _ Service = (*mockService)(nil)
+var _ contracts.Service = (*mockService)(nil)
 
-func (m *mockService) Store(context.Context, *model.Metric) error {
+func (m *mockService) Store(context.Context, *model.MetricDto) error {
 	if m.storeErr {
 		return errStore
 	}
 	return nil
 }
 
-func (m *mockService) StoreMany(context.Context, []model.Metric) error {
+func (m *mockService) StoreMany(context.Context, []model.MetricDto) error {
 	if m.storeManyErr {
 		return errStoreMany
 	}
 	return nil
 }
 
-func (m *mockService) StoreManyWithRetry(context.Context, []model.Metric) error {
+func (m *mockService) StoreManyWithRetry(context.Context, []model.MetricDto) error {
 	if m.storeManyErr {
 		return errStoreMany
 	}
 	return nil
 }
 
-func (m *mockService) Get(context.Context, string) (model.Metric, error) {
+func (m *mockService) Get(context.Context, string) (model.MetricDto, error) {
 	if m.notFound {
-		return model.Metric{}, repository.ErrNotFound
+		return model.MetricDto{}, repository.ErrNotFound
 	}
 	if m.getErr {
-		return model.Metric{}, errGet
+		return model.MetricDto{}, errGet
 	}
-	metric := model.Metric{Name: "test"}
+	metric := model.MetricDto{Name: "test"}
 	if m.gauge {
 		metric.Value.Type = model.TypeGauge
 		metric.Value.Gauge = 0.1
@@ -84,7 +85,7 @@ func (m *mockService) Get(context.Context, string) (model.Metric, error) {
 	return metric, nil
 }
 
-func (m *mockService) GetAll(context.Context) ([]model.Metric, error) {
+func (m *mockService) GetAll(context.Context) ([]model.MetricDto, error) {
 	if m.getAll {
 		return nil, errGetAll
 	}
@@ -679,8 +680,8 @@ func TestPing(t *testing.T) {
 
 }
 
-func filledStorage() []model.Metric {
-	metrics := []model.Metric{
+func filledStorage() []model.MetricDto {
+	metrics := []model.MetricDto{
 		{
 			Name: "gauge",
 			Value: model.MetricValue{

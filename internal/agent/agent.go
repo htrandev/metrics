@@ -2,57 +2,43 @@ package agent
 
 import (
 	"context"
-	"crypto/rsa"
-	"encoding/base64"
-	"errors"
-	"fmt"
-	"io"
 	"sync"
 	"time"
 
-	"github.com/go-resty/resty/v2"
 	"go.uber.org/zap"
 
-	"github.com/htrandev/metrics/internal/handler/middleware"
 	"github.com/htrandev/metrics/internal/model"
-	"github.com/htrandev/metrics/pkg/netutil"
-	"github.com/htrandev/metrics/pkg/sign"
 )
+
+type Client interface {
+	Send(ctx context.Context, metrics []model.MetricDto) error
+}
 
 // Collector предоставляет интерфейс взаимодействия со сборщик метрик.
 type Collector interface {
-	Collect() []model.Metric
-	CollectGopsutil() ([]model.Metric, error)
+	Collect() []model.MetricDto
+	CollectGopsutil() ([]model.MetricDto, error)
 }
 
 // defaultOpts определяет параметры для агента по умолчанию.
 func defaultOpts() *AgentOptions {
 	return &AgentOptions{
-		Addr:           "localhost:8080",
-		Signature:      "",
-		MaxRetry:       3,
 		RateLimit:      3,
 		PollInterval:   2 * time.Second,
 		ReportInterval: 10 * time.Second,
-		Client:         resty.New(),
 		Logger:         zap.NewNop(),
 	}
 }
 
 // AgentOptions определяет параметры для Агента.
 type AgentOptions struct {
-	Addr      string
-	Signature string
-	MaxRetry  int
 	RateLimit int
-	IP        string
 
 	PollInterval   time.Duration
 	ReportInterval time.Duration
 
-	Key       *rsa.PublicKey
-	Client    *resty.Client
 	Logger    *zap.Logger
+	Client    Client
 	Collector Collector
 }
 
@@ -63,16 +49,8 @@ func validateOptions(opts *AgentOptions) *AgentOptions {
 		opts = defaultOpts()
 	}
 
-	if opts.MaxRetry <= 0 {
-		opts.MaxRetry = 3
-	}
-
 	if opts.RateLimit <= 0 {
 		opts.RateLimit = 3
-	}
-
-	if opts.Addr == "" {
-		opts.Addr = "localhost:8080"
 	}
 
 	if opts.ReportInterval == 0 {
@@ -86,18 +64,6 @@ func validateOptions(opts *AgentOptions) *AgentOptions {
 		opts.Logger = zap.NewNop()
 	}
 
-	if opts.Client == nil {
-		opts.Client = resty.New()
-	}
-
-	ip, err := netutil.GetLocalIP()
-	if err != nil {
-		opts.Logger.Error("get local ip",
-			zap.String("method", "SendManyMetrics"),
-			zap.Error(err),
-		)
-	}
-	opts.IP = ip.String()
 	return opts
 }
 
@@ -116,7 +82,7 @@ func (a *Agent) Run(ctx context.Context) {
 	a.opts.Logger.Info("running agent")
 	var wg sync.WaitGroup
 
-	collectChan := make(chan []model.Metric)
+	collectChan := make(chan []model.MetricDto)
 	a.Collect(ctx, collectChan)
 
 	for i := 0; i < a.opts.RateLimit; i++ {
@@ -133,7 +99,7 @@ func (a *Agent) Run(ctx context.Context) {
 					a.opts.Logger.Info("send metrics with retry")
 
 					start := time.Now()
-					err := a.SendManyWithRetry(ctx, metrics)
+					err := a.opts.Client.Send(ctx, metrics)
 					elapsed := time.Since(start)
 
 					if err != nil {
@@ -155,7 +121,7 @@ func (a *Agent) Run(ctx context.Context) {
 }
 
 // Collect собирает метрики и передаёт их в полученный канал(collectChan).
-func (a *Agent) Collect(ctx context.Context, collectChan chan<- []model.Metric) {
+func (a *Agent) Collect(ctx context.Context, collectChan chan<- []model.MetricDto) {
 	go func() {
 		poller := a.poller(ctx)
 
@@ -176,8 +142,8 @@ func (a *Agent) Collect(ctx context.Context, collectChan chan<- []model.Metric) 
 }
 
 // poller возвращает канал, в который отправляются полученные метрики.
-func (a *Agent) poller(ctx context.Context) <-chan []model.Metric {
-	pollChan := make(chan []model.Metric)
+func (a *Agent) poller(ctx context.Context) <-chan []model.MetricDto {
+	pollChan := make(chan []model.MetricDto)
 
 	go func() {
 		defer close(pollChan)
@@ -212,91 +178,4 @@ func (a *Agent) poller(ctx context.Context) <-chan []model.Metric {
 	}()
 
 	return pollChan
-}
-
-// SendSingleMetric отправляет за раз одну метрику на сервер.
-func (a *Agent) SendSingleMetric(ctx context.Context, metric model.Metric) error {
-	req := buildSingleRequest(metric)
-	body, err := buildSingleBody(req)
-	if err != nil {
-		return fmt.Errorf("build body: %w", err)
-	}
-	url := buildSingleURL(a.opts.Addr)
-
-	_, err = a.opts.Client.R().
-		SetHeader("Content-Type", "application/json").
-		SetHeader("Content-Encoding", "gzip").
-		SetBody(body).
-		SetContext(ctx).
-		Post(url)
-	if errors.Is(err, io.EOF) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("post: %w", err)
-	}
-	return nil
-}
-
-// SendManyMetrics отправляет за раз несколько метрик на сервер.
-func (a *Agent) SendManyMetrics(ctx context.Context, metrics []model.Metric) error {
-	if len(metrics) == 0 {
-		return nil
-	}
-
-	req := buildManyRequest(metrics)
-	body, err := a.buildManyBody(req)
-	if err != nil {
-		return fmt.Errorf("build body: %w", err)
-	}
-
-	url := buildManyURL(a.opts.Addr)
-
-	r := a.opts.Client.R().
-		SetHeader(middleware.IPHeader, a.opts.IP).
-		SetHeader("Content-Type", "application/json").
-		SetHeader("Content-Encoding", "gzip").
-		SetBody(body).
-		SetContext(ctx)
-
-	if a.opts.Signature != "" {
-		s := sign.Signature(a.opts.Signature)
-		signature := s.Sign(body)
-		hash := base64.RawURLEncoding.EncodeToString(signature)
-		r.SetHeader("HashSHA256", hash)
-	}
-
-	_, err = r.Post(url)
-	if errors.Is(err, io.EOF) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("post: %w", err)
-	}
-	return nil
-}
-
-// SendManyWithRetry отправляет за раз несколько метрик на сервер,
-// если произошла ошибка, пытается повторно отправить указанное в MaxRetry количество раз.
-func (a *Agent) SendManyWithRetry(ctx context.Context, metrics []model.Metric) error {
-	err := a.SendManyMetrics(ctx, metrics)
-
-	if err != nil {
-		a.opts.Logger.Error("send many metrics", zap.Error(err), zap.String("scope", "agent/sendWithRetry"))
-		a.opts.Logger.Info("try to resend metrics", zap.String("scope", "agent/sendWithRetry"))
-
-		for i := 0; i < a.opts.MaxRetry; i++ {
-			a.opts.Logger.Debug("", zap.Int("retry", i+1))
-			retryDelay := i*2 + 1
-			time.Sleep(time.Second * time.Duration(retryDelay))
-			err := a.SendManyMetrics(ctx, metrics)
-			if err != nil {
-				a.opts.Logger.Error("send many metrics", zap.Int("retry", i+1), zap.Error(err), zap.String("scope", "agent/sendWithRetry"))
-				continue
-			}
-			return nil
-		}
-		return fmt.Errorf("send many with retries: %w", err)
-	}
-	return nil
 }

@@ -13,7 +13,7 @@ import (
 )
 
 // Get обрабатывает HTTP GET /value/{metricType}/{metricName} для получения одной метрики.
-// Возвращает значение в plain text формате. 
+// Возвращает значение в plain text формате.
 func (h *MetricHandler) Get(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
