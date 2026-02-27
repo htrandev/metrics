@@ -168,7 +168,7 @@ func run() error {
 		return fmt.Errorf("init grpc listener: %w", err)
 	}
 	zl.Info("init server interceptors")
-	intrcs, err := getInterceptors(cfg.TrustedSubnet, zl)
+	intrcs, err := getInterceptors(cfg.TrustedSubnet, cfg.Signature, zl)
 	if err != nil {
 		return fmt.Errorf("init server interceptors: %w", err)
 	}
@@ -257,7 +257,7 @@ func registerSubscribers(p *audit.Auditor, subs ...audit.Observer) {
 	}
 }
 
-func getInterceptors(cidr string, log *zap.Logger) ([]grpc.UnaryServerInterceptor, error) {
+func getInterceptors(cidr, signature string, log *zap.Logger) ([]grpc.UnaryServerInterceptor, error) {
 	var intrcs []grpc.UnaryServerInterceptor
 
 	intrcs = append(intrcs, interceptors.Logger(log))
@@ -269,6 +269,10 @@ func getInterceptors(cidr string, log *zap.Logger) ([]grpc.UnaryServerIntercepto
 		}
 
 		intrcs = append(intrcs, interceptors.Subnet(subnet))
+	}
+
+	if signature != "" {
+		intrcs = append(intrcs, interceptors.Signature(signature))
 	}
 	return intrcs, nil
 }
