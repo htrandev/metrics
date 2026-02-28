@@ -4,7 +4,6 @@ package audit
 
 import (
 	json "encoding/json"
-
 	easyjson "github.com/mailru/easyjson"
 	jlexer "github.com/mailru/easyjson/jlexer"
 	jwriter "github.com/mailru/easyjson/jwriter"
@@ -18,7 +17,61 @@ var (
 	_ easyjson.Marshaler
 )
 
-func easyjsonAb7d04DecodeGithubComHtrandevMetricsInternalAudit(in *jlexer.Lexer, out *AuditInfo) {
+func easyjsonAb7d04DecodeGithubComHtrandevMetricsInternalAudit(in *jlexer.Lexer, out *Auditor) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		switch key {
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjsonAb7d04EncodeGithubComHtrandevMetricsInternalAudit(out *jwriter.Writer, in Auditor) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	out.RawByte('}')
+}
+
+// MarshalJSON supports json.Marshaler interface
+func (v Auditor) MarshalJSON() ([]byte, error) {
+	w := jwriter.Writer{}
+	easyjsonAb7d04EncodeGithubComHtrandevMetricsInternalAudit(&w, v)
+	return w.Buffer.BuildBytes(), w.Error
+}
+
+// MarshalEasyJSON supports easyjson.Marshaler interface
+func (v Auditor) MarshalEasyJSON(w *jwriter.Writer) {
+	easyjsonAb7d04EncodeGithubComHtrandevMetricsInternalAudit(w, v)
+}
+
+// UnmarshalJSON supports json.Unmarshaler interface
+func (v *Auditor) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	easyjsonAb7d04DecodeGithubComHtrandevMetricsInternalAudit(&r, v)
+	return r.Error()
+}
+
+// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
+func (v *Auditor) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	easyjsonAb7d04DecodeGithubComHtrandevMetricsInternalAudit(l, v)
+}
+func easyjsonAb7d04DecodeGithubComHtrandevMetricsInternalAudit1(in *jlexer.Lexer, out *AuditInfo) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -81,7 +134,7 @@ func easyjsonAb7d04DecodeGithubComHtrandevMetricsInternalAudit(in *jlexer.Lexer,
 		in.Consumed()
 	}
 }
-func easyjsonAb7d04EncodeGithubComHtrandevMetricsInternalAudit(out *jwriter.Writer, in AuditInfo) {
+func easyjsonAb7d04EncodeGithubComHtrandevMetricsInternalAudit1(out *jwriter.Writer, in AuditInfo) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -117,23 +170,23 @@ func easyjsonAb7d04EncodeGithubComHtrandevMetricsInternalAudit(out *jwriter.Writ
 // MarshalJSON supports json.Marshaler interface
 func (v AuditInfo) MarshalJSON() ([]byte, error) {
 	w := jwriter.Writer{}
-	easyjsonAb7d04EncodeGithubComHtrandevMetricsInternalAudit(&w, v)
+	easyjsonAb7d04EncodeGithubComHtrandevMetricsInternalAudit1(&w, v)
 	return w.Buffer.BuildBytes(), w.Error
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v AuditInfo) MarshalEasyJSON(w *jwriter.Writer) {
-	easyjsonAb7d04EncodeGithubComHtrandevMetricsInternalAudit(w, v)
+	easyjsonAb7d04EncodeGithubComHtrandevMetricsInternalAudit1(w, v)
 }
 
 // UnmarshalJSON supports json.Unmarshaler interface
 func (v *AuditInfo) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
-	easyjsonAb7d04DecodeGithubComHtrandevMetricsInternalAudit(&r, v)
+	easyjsonAb7d04DecodeGithubComHtrandevMetricsInternalAudit1(&r, v)
 	return r.Error()
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *AuditInfo) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonAb7d04DecodeGithubComHtrandevMetricsInternalAudit(l, v)
+	easyjsonAb7d04DecodeGithubComHtrandevMetricsInternalAudit1(l, v)
 }

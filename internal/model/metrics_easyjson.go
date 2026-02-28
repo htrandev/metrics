@@ -4,7 +4,6 @@ package model
 
 import (
 	json "encoding/json"
-
 	easyjson "github.com/mailru/easyjson"
 	jlexer "github.com/mailru/easyjson/jlexer"
 	jwriter "github.com/mailru/easyjson/jwriter"
@@ -289,7 +288,7 @@ func (v *MetricValue) UnmarshalJSON(data []byte) error {
 func (v *MetricValue) UnmarshalEasyJSON(l *jlexer.Lexer) {
 	easyjson2220f231DecodeGithubComHtrandevMetricsInternalModel2(l, v)
 }
-func easyjson2220f231DecodeGithubComHtrandevMetricsInternalModel3(in *jlexer.Lexer, out *Metric) {
+func easyjson2220f231DecodeGithubComHtrandevMetricsInternalModel3(in *jlexer.Lexer, out *MetricDto) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -325,7 +324,7 @@ func easyjson2220f231DecodeGithubComHtrandevMetricsInternalModel3(in *jlexer.Lex
 		in.Consumed()
 	}
 }
-func easyjson2220f231EncodeGithubComHtrandevMetricsInternalModel3(out *jwriter.Writer, in Metric) {
+func easyjson2220f231EncodeGithubComHtrandevMetricsInternalModel3(out *jwriter.Writer, in MetricDto) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -343,25 +342,25 @@ func easyjson2220f231EncodeGithubComHtrandevMetricsInternalModel3(out *jwriter.W
 }
 
 // MarshalJSON supports json.Marshaler interface
-func (v Metric) MarshalJSON() ([]byte, error) {
+func (v MetricDto) MarshalJSON() ([]byte, error) {
 	w := jwriter.Writer{}
 	easyjson2220f231EncodeGithubComHtrandevMetricsInternalModel3(&w, v)
 	return w.Buffer.BuildBytes(), w.Error
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
-func (v Metric) MarshalEasyJSON(w *jwriter.Writer) {
+func (v MetricDto) MarshalEasyJSON(w *jwriter.Writer) {
 	easyjson2220f231EncodeGithubComHtrandevMetricsInternalModel3(w, v)
 }
 
 // UnmarshalJSON supports json.Unmarshaler interface
-func (v *Metric) UnmarshalJSON(data []byte) error {
+func (v *MetricDto) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
 	easyjson2220f231DecodeGithubComHtrandevMetricsInternalModel3(&r, v)
 	return r.Error()
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
-func (v *Metric) UnmarshalEasyJSON(l *jlexer.Lexer) {
+func (v *MetricDto) UnmarshalEasyJSON(l *jlexer.Lexer) {
 	easyjson2220f231DecodeGithubComHtrandevMetricsInternalModel3(l, v)
 }

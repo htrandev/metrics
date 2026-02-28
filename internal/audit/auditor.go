@@ -2,7 +2,7 @@ package audit
 
 import "context"
 
-// Observer определяет интерфейс наблюдателя 
+// Observer определяет интерфейс наблюдателя
 // для получения уведомлений о событиях.
 type Observer interface {
 	Update(ctx context.Context, info AuditInfo)
@@ -17,7 +17,7 @@ type Auditor struct {
 }
 
 // AuditInfo содержит информацию о событии.
-// 
+//
 //easyjson:json
 type AuditInfo struct {
 	Timestamp int64    `json:"ts"`

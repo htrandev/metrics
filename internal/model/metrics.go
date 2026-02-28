@@ -4,18 +4,20 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+
+	pb "github.com/htrandev/metrics/internal/proto"
 )
 
 // Storager определяет интерфейс хранилища метрик.
 type Storager interface {
-	Get(ctx context.Context, name string) (Metric, error)
-	GetAll(ctx context.Context) ([]Metric, error)
+	Get(ctx context.Context, name string) (MetricDto, error)
+	GetAll(ctx context.Context) ([]MetricDto, error)
 
-	Store(ctx context.Context, metric *Metric) error
-	StoreMany(ctx context.Context, metrics []Metric) error
-	StoreManyWithRetry(ctx context.Context, metrics []Metric) error
+	Store(ctx context.Context, metric *MetricDto) error
+	StoreMany(ctx context.Context, metrics []MetricDto) error
+	StoreManyWithRetry(ctx context.Context, metrics []MetricDto) error
 
-	Set(ctx context.Context, metric *Metric) error
+	Set(ctx context.Context, metric *MetricDto) error
 
 	Ping(ctx context.Context) error
 	Close() error
@@ -36,8 +38,8 @@ type Metrics struct {
 	Value *float64 `json:"value,omitempty"` // значение метрики в случае передачи gauge.
 }
 
-// Metric внутренняя структура метрики с типизированным значением.
-type Metric struct {
+// MetricDto внутренняя структура метрики с типизированным значением.
+type MetricDto struct {
 	Name  string `json:"name"`
 	Value MetricValue
 }
@@ -98,7 +100,7 @@ func (mv MetricValue) String() string {
 }
 
 // SetValue устанавливает строковое значение метрики в соответствии с типом.
-func (m *Metric) SetValue(s string) error {
+func (m *MetricDto) SetValue(s string) error {
 	switch m.Value.Type {
 	case TypeGauge:
 		val, err := strconv.ParseFloat(s, 64)
@@ -117,17 +119,45 @@ func (m *Metric) SetValue(s string) error {
 }
 
 // Gauge создает новую gauge метрику с переданным значением.
-func Gauge(name string, value float64) Metric {
-	return Metric{
+func Gauge(name string, value float64) MetricDto {
+	return MetricDto{
 		Name:  name,
 		Value: MetricValue{Type: TypeGauge, Gauge: value},
 	}
 }
 
 // Gauge создает новую counter метрику с переданным значением.
-func Counter(name string, value int64) Metric {
-	return Metric{
+func Counter(name string, value int64) MetricDto {
+	return MetricDto{
 		Name:  name,
 		Value: MetricValue{Type: TypeCounter, Counter: value},
 	}
+}
+
+func FromProto(value *pb.Metric) MetricDto {
+	var m MetricDto
+	switch value.GetType() {
+	case pb.Metric_GAUGE:
+		m = Gauge(value.GetId(), value.GetValue())
+	case pb.Metric_COUNTER:
+		m = Counter(value.GetId(), value.GetDelta())
+	}
+	return m
+}
+
+func ToProto(m MetricDto) *pb.Metric {
+	var pm pb.Metric_builder
+
+	switch m.Value.Type {
+	case TypeGauge:
+		pm.Id = m.Name
+		pm.Type = pb.Metric_GAUGE
+		pm.Value = m.Value.Gauge
+	case TypeCounter:
+		pm.Id = m.Name
+		pm.Type = pb.Metric_COUNTER
+		pm.Delta = m.Value.Counter
+	}
+
+	return pm.Build()
 }

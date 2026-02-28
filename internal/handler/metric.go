@@ -7,20 +7,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/htrandev/metrics/internal/audit"
-	"github.com/htrandev/metrics/internal/model"
+	"github.com/htrandev/metrics/internal/contracts"
 )
-
-// Service предоставляет интерфейс взаимодействия с сервисом для работы с метриками.
-type Service interface {
-	Get(ctx context.Context, name string) (model.Metric, error)
-	GetAll(ctx context.Context) ([]model.Metric, error)
-
-	Store(ctx context.Context, metric *model.Metric) error
-	StoreMany(ctx context.Context, metric []model.Metric) error
-	StoreManyWithRetry(ctx context.Context, metric []model.Metric) error
-
-	Ping(ctx context.Context) error
-}
 
 // Publisher предоставляет интерфейс публикации событий.
 type Publisher interface {
@@ -29,7 +17,7 @@ type Publisher interface {
 
 // MetricHandler определяет обработчика запросов для работы с метриками.
 type MetricHandler struct {
-	service   Service
+	service   contracts.Service
 	logger    *zap.Logger
 	Publisher Publisher
 }
@@ -37,7 +25,7 @@ type MetricHandler struct {
 // NewMetricsHandler возвращает новый экземпляр MetricsHandler.
 func NewMetricsHandler(
 	l *zap.Logger,
-	s Service,
+	s contracts.Service,
 	p Publisher,
 ) *MetricHandler {
 	return &MetricHandler{

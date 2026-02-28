@@ -67,12 +67,12 @@ func TestSet(t *testing.T) {
 
 	testCases := []struct {
 		name           string
-		metric         *model.Metric
-		expectedMetric model.Metric
+		metric         *model.MetricDto
+		expectedMetric model.MetricDto
 	}{
 		{
 			name: "valid gauge first",
-			metric: func() *model.Metric {
+			metric: func() *model.MetricDto {
 				m := model.Gauge(setGauge, 0.1)
 				return &m
 			}(),
@@ -80,7 +80,7 @@ func TestSet(t *testing.T) {
 		},
 		{
 			name: "valid gauge second",
-			metric: func() *model.Metric {
+			metric: func() *model.MetricDto {
 				m := model.Gauge(setGauge, 0.2)
 				return &m
 			}(),
@@ -88,7 +88,7 @@ func TestSet(t *testing.T) {
 		},
 		{
 			name: "valid counter first",
-			metric: func() *model.Metric {
+			metric: func() *model.MetricDto {
 				m := model.Counter(setCounter, 1)
 				return &m
 			}(),
@@ -96,7 +96,7 @@ func TestSet(t *testing.T) {
 		},
 		{
 			name: "valid counter second",
-			metric: func() *model.Metric {
+			metric: func() *model.MetricDto {
 				m := model.Counter(setCounter, 2)
 				return &m
 			}(),
@@ -127,12 +127,12 @@ func TestStore(t *testing.T) {
 
 	testCases := []struct {
 		name           string
-		metric         *model.Metric
-		expectedMetric model.Metric
+		metric         *model.MetricDto
+		expectedMetric model.MetricDto
 	}{
 		{
 			name: "valid gauge first",
-			metric: func() *model.Metric {
+			metric: func() *model.MetricDto {
 				m := model.Gauge(storeGauge, 0.1)
 				return &m
 			}(),
@@ -140,7 +140,7 @@ func TestStore(t *testing.T) {
 		},
 		{
 			name: "valid gauge second",
-			metric: func() *model.Metric {
+			metric: func() *model.MetricDto {
 				m := model.Gauge(storeGauge, 0.2)
 				return &m
 			}(),
@@ -148,7 +148,7 @@ func TestStore(t *testing.T) {
 		},
 		{
 			name: "valid counter first",
-			metric: func() *model.Metric {
+			metric: func() *model.MetricDto {
 				m := model.Counter(storeCounter, 1)
 				return &m
 			}(),
@@ -156,7 +156,7 @@ func TestStore(t *testing.T) {
 		},
 		{
 			name: "valid counter second",
-			metric: func() *model.Metric {
+			metric: func() *model.MetricDto {
 				m := model.Counter(storeCounter, 2)
 				return &m
 			}(),
@@ -187,12 +187,12 @@ func TestGet(t *testing.T) {
 
 	testCases := []struct {
 		name           string
-		metric         *model.Metric
-		expectedMetric model.Metric
+		metric         *model.MetricDto
+		expectedMetric model.MetricDto
 	}{
 		{
 			name: "valid gauge first",
-			metric: func() *model.Metric {
+			metric: func() *model.MetricDto {
 				m := model.Gauge(getGauge, 0.1)
 				return &m
 			}(),
@@ -200,7 +200,7 @@ func TestGet(t *testing.T) {
 		},
 		{
 			name: "valid gauge second",
-			metric: func() *model.Metric {
+			metric: func() *model.MetricDto {
 				m := model.Gauge(getGauge, 0.2)
 				return &m
 			}(),
@@ -208,7 +208,7 @@ func TestGet(t *testing.T) {
 		},
 		{
 			name: "valid counter first",
-			metric: func() *model.Metric {
+			metric: func() *model.MetricDto {
 				m := model.Counter(getCounter, 1)
 				return &m
 			}(),
@@ -216,7 +216,7 @@ func TestGet(t *testing.T) {
 		},
 		{
 			name: "valid counter second",
-			metric: func() *model.Metric {
+			metric: func() *model.MetricDto {
 				m := model.Counter(getCounter, 2)
 				return &m
 			}(),
@@ -247,25 +247,25 @@ func TestGetAll(t *testing.T) {
 
 	testCases := []struct {
 		name            string
-		metrics         []*model.Metric
-		expectedMetrics []model.Metric
+		metrics         []*model.MetricDto
+		expectedMetrics []model.MetricDto
 	}{
 		{
 			name:            "valid empty",
 			metrics:         nil,
-			expectedMetrics: []model.Metric{},
+			expectedMetrics: []model.MetricDto{},
 		},
 		{
 			name: "valid not empty",
-			metrics: func() []*model.Metric {
+			metrics: func() []*model.MetricDto {
 				mg1 := model.Gauge(getAllGauge, 0.1)
 				mg2 := model.Gauge(getAllGauge, 0.2)
 				mc1 := model.Counter(getAllCounter, 1)
 				mc2 := model.Counter(getAllCounter, 2)
-				metrics := []*model.Metric{&mg1, &mg2, &mc1, &mc2}
+				metrics := []*model.MetricDto{&mg1, &mg2, &mc1, &mc2}
 				return metrics
 			}(),
-			expectedMetrics: []model.Metric{
+			expectedMetrics: []model.MetricDto{
 				model.Gauge(getAllGauge, 0.2),
 				model.Counter(getAllCounter, 3),
 			},
@@ -299,25 +299,25 @@ func TestStoreMany(t *testing.T) {
 
 	testCases := []struct {
 		name            string
-		metrics         []model.Metric
-		expectedMetrics []model.Metric
+		metrics         []model.MetricDto
+		expectedMetrics []model.MetricDto
 	}{
 		{
 			name:            "valid empty",
 			metrics:         nil,
-			expectedMetrics: []model.Metric{},
+			expectedMetrics: []model.MetricDto{},
 		},
 		{
 			name: "valid not empty",
-			metrics: func() []model.Metric {
-				return []model.Metric{
+			metrics: func() []model.MetricDto {
+				return []model.MetricDto{
 					model.Gauge(storeManyGauge, 0.1),
 					model.Counter(storeManyCounter, 1),
 					model.Gauge(storeManyGauge, 0.2),
 					model.Counter(storeManyCounter, 2),
 				}
 			}(),
-			expectedMetrics: []model.Metric{
+			expectedMetrics: []model.MetricDto{
 				model.Gauge(storeManyGauge, 0.2),
 				model.Counter(storeManyCounter, 3),
 			},
@@ -347,29 +347,29 @@ func TestStoreManyWithRetry(t *testing.T) {
 
 	testCases := []struct {
 		name            string
-		metrics         []model.Metric
-		expectedMetrics []model.Metric
+		metrics         []model.MetricDto
+		expectedMetrics []model.MetricDto
 		repository      *PostgresRepository
 		wantError       bool
 	}{
 		{
 			name:            "valid empty",
 			metrics:         nil,
-			expectedMetrics: []model.Metric{},
+			expectedMetrics: []model.MetricDto{},
 			repository:      setupTesting(t),
 			wantError:       false,
 		},
 		{
 			name: "valid not empty",
-			metrics: func() []model.Metric {
-				return []model.Metric{
+			metrics: func() []model.MetricDto {
+				return []model.MetricDto{
 					model.Gauge(storeManyWithRetryGauge, 0.1),
 					model.Counter(storeManyWithRetryCounter, 1),
 					model.Gauge(storeManyWithRetryGauge, 0.2),
 					model.Counter(storeManyWithRetryCounter, 2),
 				}
 			}(),
-			expectedMetrics: []model.Metric{
+			expectedMetrics: []model.MetricDto{
 				model.Gauge(storeManyWithRetryGauge, 0.2),
 				model.Counter(storeManyWithRetryCounter, 3),
 			},
@@ -378,15 +378,15 @@ func TestStoreManyWithRetry(t *testing.T) {
 		},
 		{
 			name: "store err",
-			metrics: func() []model.Metric {
-				return []model.Metric{
+			metrics: func() []model.MetricDto {
+				return []model.MetricDto{
 					model.Gauge(storeManyWithRetryGauge, 0.1),
 					model.Counter(storeManyWithRetryCounter, 1),
 					model.Gauge(storeManyWithRetryGauge, 0.2),
 					model.Counter(storeManyWithRetryCounter, 2),
 				}
 			}(),
-			expectedMetrics: []model.Metric{},
+			expectedMetrics: []model.MetricDto{},
 			repository: func() *PostgresRepository {
 				r := setupTesting(t)
 				r.Close()
@@ -396,15 +396,15 @@ func TestStoreManyWithRetry(t *testing.T) {
 		},
 		{
 			name: "conn error",
-			metrics: func() []model.Metric {
-				return []model.Metric{
+			metrics: func() []model.MetricDto {
+				return []model.MetricDto{
 					model.Gauge(storeManyWithRetryGauge, 0.1),
 					model.Counter(storeManyWithRetryCounter, 1),
 					model.Gauge(storeManyWithRetryGauge, 0.2),
 					model.Counter(storeManyWithRetryCounter, 2),
 				}
 			}(),
-			expectedMetrics: []model.Metric{},
+			expectedMetrics: []model.MetricDto{},
 			repository: func() *PostgresRepository {
 				t.Helper()
 

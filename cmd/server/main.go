@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,12 +18,16 @@ import (
 	"github.com/pressly/goose/v3/database"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 
 	"github.com/htrandev/metrics/internal/audit"
 	"github.com/htrandev/metrics/internal/config"
+	grpcserver "github.com/htrandev/metrics/internal/grpc"
+	"github.com/htrandev/metrics/internal/grpc/interceptors"
 	"github.com/htrandev/metrics/internal/handler"
 	"github.com/htrandev/metrics/internal/info"
 	"github.com/htrandev/metrics/internal/model"
+	"github.com/htrandev/metrics/internal/proto"
 	"github.com/htrandev/metrics/internal/repository/local"
 	"github.com/htrandev/metrics/internal/repository/postgres"
 	"github.com/htrandev/metrics/internal/router"
@@ -30,6 +35,7 @@ import (
 	"github.com/htrandev/metrics/migrations"
 	"github.com/htrandev/metrics/pkg/crypto"
 	"github.com/htrandev/metrics/pkg/logger"
+	"github.com/htrandev/metrics/pkg/netutil"
 
 	_ "net/http/pprof"
 
@@ -113,8 +119,25 @@ func run() error {
 		return fmt.Errorf("init private key: %w", err)
 	}
 
+	zl.Info("configure router options")
+	ro := router.RouterOptions{
+		Signature: cfg.Signature,
+		Key:       privateKey,
+		Logger:    zl,
+		Handler:   metricHandler,
+	}
+
+	zl.Info("parse subnet")
+	if cfg.TrustedSubnet != "" {
+		subnet, err := netutil.CIDR(cfg.TrustedSubnet)
+		if err != nil {
+			return fmt.Errorf("get subnet: %w", err)
+		}
+		ro.Subnet = subnet
+	}
+
 	zl.Info("init router")
-	router := router.New(cfg.Signature, privateKey, zl, metricHandler)
+	router := router.New(ro)
 
 	group := errgroup.Group{}
 
@@ -139,6 +162,34 @@ func run() error {
 		return nil
 	})
 
+	zl.Info("init grpc listener")
+	lis, err := net.Listen("tcp", cfg.GRPCAddr)
+	if err != nil {
+		return fmt.Errorf("init grpc listener: %w", err)
+	}
+	zl.Info("init server interceptors")
+	intrcs, err := getInterceptors(cfg.TrustedSubnet, cfg.Signature, zl)
+	if err != nil {
+		return fmt.Errorf("init server interceptors: %w", err)
+	}
+
+	zl.Info("init grpc server")
+	grpcSrv := grpc.NewServer(grpc.ChainUnaryInterceptor(intrcs...))
+
+	zl.Info("register grpc server")
+	proto.RegisterMetricsServer(grpcSrv, grpcserver.New(&grpcserver.MetricServerOptions{
+		Service:   metricService,
+		Signature: cfg.Signature,
+	}))
+
+	group.Go(func() error {
+		zl.Info("start serving grpc", zap.String("addr", cfg.GRPCAddr))
+		if err := grpcSrv.Serve(lis); err != nil && err != http.ErrServerClosed {
+			return fmt.Errorf("can't start server: %v", err)
+		}
+		return nil
+	})
+
 	if err := group.Wait(); err != nil {
 		if err := pprofSrv.Shutdown(ctx); err != nil {
 			return fmt.Errorf("shutdown pprof server: %w", err)
@@ -147,6 +198,8 @@ func run() error {
 		if err := srv.Shutdown(ctx); err != nil {
 			return fmt.Errorf("shutdown server: %w", err)
 		}
+
+		grpcSrv.Stop()
 	}
 
 	return nil
@@ -202,4 +255,24 @@ func registerSubscribers(p *audit.Auditor, subs ...audit.Observer) {
 	for _, sub := range subs {
 		p.Register(sub)
 	}
+}
+
+func getInterceptors(cidr, signature string, log *zap.Logger) ([]grpc.UnaryServerInterceptor, error) {
+	var intrcs []grpc.UnaryServerInterceptor
+
+	intrcs = append(intrcs, interceptors.Logger(log))
+
+	if cidr != "" {
+		subnet, err := netutil.CIDR(cidr)
+		if err != nil {
+			return nil, fmt.Errorf("get subnet: %w", err)
+		}
+
+		intrcs = append(intrcs, interceptors.Subnet(subnet))
+	}
+
+	if signature != "" {
+		intrcs = append(intrcs, interceptors.Signature(signature))
+	}
+	return intrcs, nil
 }

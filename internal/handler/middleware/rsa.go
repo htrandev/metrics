@@ -36,6 +36,7 @@ func RSA(key *rsa.PrivateKey, logger *zap.Logger) func(next http.Handler) http.H
 			body, err := crypto.Decrypt(key, buf.Bytes())
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
+				return
 			}
 
 			r.Body = io.NopCloser(bytes.NewReader(body))

@@ -34,7 +34,7 @@ func (h *MetricHandler) Update(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	metric := &model.Metric{
+	metric := &model.MetricDto{
 		Name: metricName,
 		Value: model.MetricValue{
 			Type: mt,

@@ -54,7 +54,7 @@ func (r *PostgresRepository) Truncate(ctx context.Context) error {
 }
 
 // Get возвращает метрику по имени.
-func (r *PostgresRepository) Get(ctx context.Context, name string) (model.Metric, error) {
+func (r *PostgresRepository) Get(ctx context.Context, name string) (model.MetricDto, error) {
 	query := `SELECT type, gauge, counter
 		FROM metrics
 		WHERE name = $1
@@ -70,20 +70,20 @@ func (r *PostgresRepository) Get(ctx context.Context, name string) (model.Metric
 
 	if err := row.Scan(&t, &gauge, &counter); err != nil {
 		if err == sql.ErrNoRows {
-			return model.Metric{}, repository.ErrNotFound
+			return model.MetricDto{}, repository.ErrNotFound
 		}
-		return model.Metric{}, fmt.Errorf("repository/get: scan: %w", err)
+		return model.MetricDto{}, fmt.Errorf("repository/get: scan: %w", err)
 	}
 
 	if row.Err() != nil {
-		return model.Metric{}, fmt.Errorf("repository/get: row: %w", row.Err())
+		return model.MetricDto{}, fmt.Errorf("repository/get: row: %w", row.Err())
 	}
 
 	return buildMetric(name, t, gauge.Float64, counter.Int64), nil
 }
 
 // GetAll возвращает все метрики.
-func (r *PostgresRepository) GetAll(ctx context.Context) ([]model.Metric, error) {
+func (r *PostgresRepository) GetAll(ctx context.Context) ([]model.MetricDto, error) {
 	query := `SELECT name, type, gauge, counter
 		FROM metrics
 	;`
@@ -93,7 +93,7 @@ func (r *PostgresRepository) GetAll(ctx context.Context) ([]model.Metric, error)
 		return nil, fmt.Errorf("repository/getAll: query context: %w", err)
 	}
 
-	metrics := make([]model.Metric, 0)
+	metrics := make([]model.MetricDto, 0)
 	for rows.Next() {
 		var (
 			name    string
@@ -118,7 +118,7 @@ func (r *PostgresRepository) GetAll(ctx context.Context) ([]model.Metric, error)
 }
 
 // Store сохраняет/обновляет метрику.
-func (r *PostgresRepository) Store(ctx context.Context, metric *model.Metric) error {
+func (r *PostgresRepository) Store(ctx context.Context, metric *model.MetricDto) error {
 	query := storeQuery()
 	_, err := r.db.ExecContext(ctx, query,
 		metric.Name,
@@ -133,7 +133,7 @@ func (r *PostgresRepository) Store(ctx context.Context, metric *model.Metric) er
 }
 
 // StoreMany сохраняет батч метрик.
-func (r *PostgresRepository) StoreMany(ctx context.Context, metrics []model.Metric) error {
+func (r *PostgresRepository) StoreMany(ctx context.Context, metrics []model.MetricDto) error {
 	if len(metrics) == 0 {
 		return nil
 	}
@@ -166,7 +166,7 @@ func (r *PostgresRepository) StoreMany(ctx context.Context, metrics []model.Metr
 }
 
 // StoreMany сохраняет батч метрик с повтором при сетевых ошибках PostgreSQL.
-func (r *PostgresRepository) StoreManyWithRetry(ctx context.Context, metrics []model.Metric) error {
+func (r *PostgresRepository) StoreManyWithRetry(ctx context.Context, metrics []model.MetricDto) error {
 	err := r.StoreMany(ctx, metrics)
 	if err != nil {
 		if isPgConnErr(err) {
@@ -197,7 +197,7 @@ func isPgConnErr(err error) bool {
 }
 
 // Set сохраняет метрику с перезаписью предыдущих занчений.
-func (r *PostgresRepository) Set(ctx context.Context, metric *model.Metric) error {
+func (r *PostgresRepository) Set(ctx context.Context, metric *model.MetricDto) error {
 	query := setQuery()
 	_, err := r.db.ExecContext(ctx, query,
 		metric.Name,
@@ -212,8 +212,8 @@ func (r *PostgresRepository) Set(ctx context.Context, metric *model.Metric) erro
 }
 
 // buildMetric преобразует переданные данные структуру model.Metric с учетом типа.
-func buildMetric(name string, t model.MetricType, gauge float64, counter int64) model.Metric {
-	var m model.Metric
+func buildMetric(name string, t model.MetricType, gauge float64, counter int64) model.MetricDto {
+	var m model.MetricDto
 
 	switch t {
 	case model.TypeGauge:

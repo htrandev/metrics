@@ -23,7 +23,7 @@ func NewCollection() *Collection {
 }
 
 // Collect собирает метрики runtime Go.
-func (c *Collection) Collect() []Metric {
+func (c *Collection) Collect() []MetricDto {
 	c.counter.Add(1)
 
 	rnd := rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), 0))
@@ -31,7 +31,7 @@ func (c *Collection) Collect() []Metric {
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
 
-	return []Metric{
+	return []MetricDto{
 		Gauge("Alloc", float64(ms.Alloc)),
 		Gauge("BuckHashSys", float64(ms.BuckHashSys)),
 		Gauge("Frees", float64(ms.Frees)),
@@ -65,7 +65,7 @@ func (c *Collection) Collect() []Metric {
 }
 
 // CollectGopsutil собирает системные метрики через gopsutil.
-func (c *Collection) CollectGopsutil() ([]Metric, error) {
+func (c *Collection) CollectGopsutil() ([]MetricDto, error) {
 	errs := make([]error, 0, 2)
 	v, err := mem.VirtualMemory()
 	if err != nil {
@@ -81,7 +81,7 @@ func (c *Collection) CollectGopsutil() ([]Metric, error) {
 		return nil, errors.Join(errs...)
 	}
 
-	metrics := []Metric{
+	metrics := []MetricDto{
 		Gauge("TotalMemory", float64(v.Total)),
 		Gauge("FreeMemory", float64(v.Free)),
 	}

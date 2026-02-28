@@ -11,12 +11,12 @@ import (
 
 // Storage предоставляет интерфейс для работы с хранилищем.
 type Storage interface {
-	Get(ctx context.Context, name string) (model.Metric, error)
-	GetAll(ctx context.Context) ([]model.Metric, error)
+	Get(ctx context.Context, name string) (model.MetricDto, error)
+	GetAll(ctx context.Context) ([]model.MetricDto, error)
 
-	Store(ctx context.Context, metric *model.Metric) error
-	StoreMany(ctx context.Context, metric []model.Metric) error
-	StoreManyWithRetry(ctx context.Context, metric []model.Metric) error
+	Store(ctx context.Context, metric *model.MetricDto) error
+	StoreMany(ctx context.Context, metric []model.MetricDto) error
+	StoreManyWithRetry(ctx context.Context, metric []model.MetricDto) error
 
 	Ping(ctx context.Context) error
 }
@@ -46,16 +46,16 @@ func (s *MetricsService) Ping(ctx context.Context) error {
 }
 
 // Get возвращает метрику по имени.
-func (s *MetricsService) Get(ctx context.Context, name string) (model.Metric, error) {
+func (s *MetricsService) Get(ctx context.Context, name string) (model.MetricDto, error) {
 	m, err := s.opts.Storage.Get(ctx, name)
 	if err != nil {
-		return model.Metric{}, fmt.Errorf("get metric: %w", err)
+		return model.MetricDto{}, fmt.Errorf("get metric: %w", err)
 	}
 	return m, nil
 }
 
 // GetAll возвращает все метрики.
-func (s *MetricsService) GetAll(ctx context.Context) ([]model.Metric, error) {
+func (s *MetricsService) GetAll(ctx context.Context) ([]model.MetricDto, error) {
 	m, err := s.opts.Storage.GetAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get all metrics: %w", err)
@@ -64,7 +64,7 @@ func (s *MetricsService) GetAll(ctx context.Context) ([]model.Metric, error) {
 }
 
 // Store сохраняет одну метрику.
-func (s *MetricsService) Store(ctx context.Context, m *model.Metric) error {
+func (s *MetricsService) Store(ctx context.Context, m *model.MetricDto) error {
 	if m == nil {
 		return nil
 	}
@@ -76,7 +76,7 @@ func (s *MetricsService) Store(ctx context.Context, m *model.Metric) error {
 }
 
 // StoreMany сохраняет батч метрик.
-func (s *MetricsService) StoreMany(ctx context.Context, metrics []model.Metric) error {
+func (s *MetricsService) StoreMany(ctx context.Context, metrics []model.MetricDto) error {
 	if len(metrics) == 0 {
 		return nil
 	}
@@ -88,7 +88,7 @@ func (s *MetricsService) StoreMany(ctx context.Context, metrics []model.Metric) 
 }
 
 // StoreManyWithRetry сохраняет батч с повторными попытками.
-func (s *MetricsService) StoreManyWithRetry(ctx context.Context, metrics []model.Metric) error {
+func (s *MetricsService) StoreManyWithRetry(ctx context.Context, metrics []model.MetricDto) error {
 	if len(metrics) == 0 {
 		return nil
 	}
